@@ -13,11 +13,7 @@ These aren't retrieval problems. They're governance problems. And they've been s
 
 ## What mem7 is
 
-A single Go binary that gives your agents persistent, searchable, governed memory over HTTP or MCP.
-
-```
-pip install mem7
-```
+Persistent, searchable, governed memory for your agents. `pip install mem7` and go :
 
 ```python
 from mem7 import Mem7
@@ -33,7 +29,9 @@ for mem in m.context("deployment approval status", limit=5):
     print(f"{mem.key}: {mem.value}")
 ```
 
-**What's inside :**
+The server is a single Go binary — zero dependencies, runs anywhere, deploys in one command. The SDK talks to it over HTTP, so your agents can be in Python, TypeScript, or anything that speaks JSON-RPC.
+
+**Under the hood :**
 
 - Hybrid search : BM25 + dense cosine + LLM reranking — 71% on the LoCoMo benchmark
 - Markdown source of truth + SQLite index, rebuildable with `mem7 rescan`
