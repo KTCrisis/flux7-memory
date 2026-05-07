@@ -128,6 +128,25 @@ var Tools = []Tool{
 			},
 		},
 	},
+	{
+		Name:        "memory_context",
+		Description: "Search memories and return structured JSON results for programmatic use by agent SDKs. Same search capabilities as memory_search but returns a JSON array of objects with key, value, tags, agent, updated fields instead of formatted markdown.",
+		InputSchema: ToolSchema{
+			Type: "object",
+			Properties: map[string]ToolProp{
+				"query":             {Type: "string", Description: "Query string. In 'raw' mode this is an FTS5 expression ; in 'natural' mode it is a plain-English question."},
+				"mode":              {Type: "string", Description: "'raw' (default) or 'natural' (stop-word stripping, wildcard stemming, OR-join)."},
+				"tags":              {Type: "array", Description: "Filter by tags (AND logic)", Items: &ToolItems{Type: "string"}},
+				"agent":             {Type: "string", Description: "Filter by agent identifier"},
+				"since":             {Type: "string", Description: "Lower bound on updated_at (RFC3339)"},
+				"until":             {Type: "string", Description: "Upper bound on updated_at (RFC3339)"},
+				"limit":             {Type: "number", Description: "Max number of results (default 10)", Default: 10},
+				"include_neighbors": {Type: "boolean", Description: "Expand results with adjacent memories for sequential keys."},
+				"neighbor_radius":   {Type: "number", Description: "How many memories to fetch on each side (default 1).", Default: 1},
+			},
+			Required: []string{"query"},
+		},
+	},
 }
 
 // RPCError is a JSON-RPC 2.0 level error returned by Dispatcher.Call.
@@ -220,6 +239,8 @@ func (d *Dispatcher) toolsCall(params json.RawMessage) any {
 		return d.store.ToolList(args)
 	case "memory_forget":
 		return d.store.ToolForget(args)
+	case "memory_context":
+		return d.store.ToolContext(args)
 	default:
 		return ErrResult("unknown tool: " + call.Name)
 	}

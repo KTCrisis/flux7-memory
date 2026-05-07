@@ -2,6 +2,7 @@ package memory
 
 import (
 	"bufio"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -436,6 +437,85 @@ func (s *Store) Prune() (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	return s.index.PurgeExpired()
+}
+
+// ToolContext performs the same search as ToolSearch but returns structured
+// JSON instead of formatted markdown — designed for SDK/programmatic use.
+func (s *Store) ToolContext(args map[string]any) Result {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+
+	query, _ := args["query"].(string)
+	if strings.TrimSpace(query) == "" {
+		return ErrResult("query is required")
+	}
+
+	tags := parseTags(args["tags"])
+	agent, _ := args["agent"].(string)
+	limit := 10
+	if v, ok := args["limit"].(float64); ok && v > 0 {
+		limit = int(v)
+	}
+	mode, _ := args["mode"].(string)
+	includeNeighbors, _ := args["include_neighbors"].(bool)
+	neighborRadius := 1
+	if v, ok := args["neighbor_radius"].(float64); ok && v > 0 {
+		neighborRadius = int(v)
+	}
+	q := searchQuery{
+		Query:            query,
+		Mode:             mode,
+		Tags:             tags,
+		Agent:            agent,
+		Limit:            limit,
+		IncludeNeighbors: includeNeighbors,
+		NeighborRadius:   neighborRadius,
+	}
+	if v, ok := args["since"].(string); ok && v != "" {
+		if t, err := time.Parse(time.RFC3339, v); err == nil {
+			q.Since = t
+		}
+	}
+	if v, ok := args["until"].(string); ok && v != "" {
+		if t, err := time.Parse(time.RFC3339, v); err == nil {
+			q.Until = t
+		}
+	}
+
+	var results []fact
+	if s.emb != nil {
+		var err error
+		results, err = s.hybridSearch(q)
+		if err != nil {
+			return ErrResult(fmt.Sprintf("hybrid search failed: %v", err))
+		}
+	} else {
+		rq := q
+		if s.rnk != nil {
+			rq.Limit = q.Limit * 3
+		}
+		var err error
+		results, err = s.index.Search(rq)
+		if err != nil {
+			return ErrResult(fmt.Sprintf("search failed: %v", err))
+		}
+		if s.rnk != nil && len(results) > 1 {
+			results, _ = s.rnk.Rerank(q.Query, results, q.Limit)
+		}
+	}
+
+	items := make([]map[string]any, len(results))
+	for i, f := range results {
+		items[i] = map[string]any{
+			"key":     f.Entity,
+			"value":   f.Object,
+			"tags":    f.Tags,
+			"agent":   f.Agent,
+			"updated": f.Updated.UTC().Format(time.RFC3339),
+		}
+	}
+	data, _ := json.Marshal(items)
+	return TextResult(string(data))
 }
 
 // Result is the MCP tool-call content envelope returned by every tool

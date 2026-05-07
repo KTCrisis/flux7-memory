@@ -48,8 +48,8 @@ func TestDispatcherToolsList(t *testing.T) {
 	if err := json.Unmarshal(raw, &m); err != nil {
 		t.Fatal(err)
 	}
-	if len(m.Tools) != 6 {
-		t.Fatalf("expected 6 tools, got %d", len(m.Tools))
+	if len(m.Tools) != 7 {
+		t.Fatalf("expected 7 tools, got %d", len(m.Tools))
 	}
 }
 
