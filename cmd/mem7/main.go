@@ -80,6 +80,13 @@ func newStore() (*memory.Store, error) {
 		key := os.Getenv("MEM7_EMBED_KEY")
 		s.SetEmbedder(url, model, provider, key)
 	}
+	if url := os.Getenv("MEM7_RERANK_URL"); url != "" {
+		model := os.Getenv("MEM7_RERANK_MODEL")
+		if model == "" {
+			model = "gemma4:e4b"
+		}
+		s.SetReranker(url, model)
+	}
 	return s, nil
 }
 

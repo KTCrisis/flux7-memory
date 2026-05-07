@@ -22,10 +22,15 @@ type Store struct {
 	mu       sync.Mutex
 	emb      *embedder
 	embCache map[int64][]float32
+	rnk      *reranker
 }
 
 func (s *Store) SetEmbedder(url, model, provider, key string) {
 	s.emb = newEmbedder(url, model, provider, key)
+}
+
+func (s *Store) SetReranker(url, model string) {
+	s.rnk = newReranker(url, model)
 }
 
 // NewStore constructs a Store rooted at dir, opens (or creates) the
@@ -281,10 +286,17 @@ func (s *Store) ToolSearch(args map[string]any) Result {
 			return ErrResult(fmt.Sprintf("hybrid search failed: %v", err))
 		}
 	} else {
+		rq := q
+		if s.rnk != nil {
+			rq.Limit = q.Limit * 3
+		}
 		var err error
-		results, err = s.index.Search(q)
+		results, err = s.index.Search(rq)
 		if err != nil {
 			return ErrResult(fmt.Sprintf("search failed: %v", err))
+		}
+		if s.rnk != nil && len(results) > 1 {
+			results, _ = s.rnk.Rerank(q.Query, results, q.Limit)
 		}
 	}
 	if len(results) == 0 {
@@ -490,7 +502,15 @@ func (s *Store) hybridSearch(q searchQuery) ([]fact, error) {
 		}
 	}
 
-	merged := mergeRRF(bm25Results, cosineResults, factMap, q.Limit)
+	mergeLimit := q.Limit
+	if s.rnk != nil {
+		mergeLimit = q.Limit * 3
+	}
+	merged := mergeRRF(bm25Results, cosineResults, factMap, mergeLimit)
+
+	if s.rnk != nil && len(merged) > 1 {
+		merged, _ = s.rnk.Rerank(q.Query, merged, q.Limit)
+	}
 
 	if q.IncludeNeighbors && len(merged) > 0 {
 		radius := q.NeighborRadius
