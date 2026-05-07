@@ -20,6 +20,7 @@ type HTTPServer struct {
 	transport Transport
 	token     string
 	logger    *log.Logger
+	sse       *sseRegistry
 }
 
 // NewHTTPServer wraps a Transport behind an HTTP server. An empty token
@@ -28,7 +29,7 @@ func NewHTTPServer(t Transport, token string, logger *log.Logger) *HTTPServer {
 	if logger == nil {
 		logger = log.Default()
 	}
-	return &HTTPServer{transport: t, token: token, logger: logger}
+	return &HTTPServer{transport: t, token: token, logger: logger, sse: newSSERegistry()}
 }
 
 // Handler returns the http.Handler exposing the server routes.
@@ -37,6 +38,8 @@ func (s *HTTPServer) Handler() http.Handler {
 	mux.HandleFunc("/healthz", s.handleHealth)
 	mux.Handle("/rpc", s.authMiddleware(http.HandlerFunc(s.handleRPC)))
 	mux.Handle("/memory/snapshot_reminder", s.authMiddleware(http.HandlerFunc(s.handleSnapshotReminder)))
+	mux.Handle("/sse", s.authMiddleware(http.HandlerFunc(s.handleSSE)))
+	mux.Handle("/messages", s.authMiddleware(http.HandlerFunc(s.handleMessages)))
 	return mux
 }
 
