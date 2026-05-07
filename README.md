@@ -1,13 +1,14 @@
 # mem7
 
-A lightweight MCP server in Go for shared memory across AI agents. Single binary, zero cgo, usable standalone over stdio or behind [agent-mesh](https://github.com/KTCrisis/agent-mesh) as a governed backend. Hybrid markdown + SQLite store with full-text search, optional dense-vector hybrid retrieval, and a dual stdio / HTTP transport.
+A lightweight MCP server in Go for shared memory across AI agents. Single binary, zero cgo, usable standalone over stdio or behind [agent-mesh](https://github.com/KTCrisis/agent-mesh) as a governed backend. Hybrid markdown + SQLite store with full-text search, optional dense-vector hybrid retrieval, LLM reranking, and a dual stdio / HTTP transport. Comes with a [Python SDK](#python-sdk) for provider-agnostic integration.
 
 ## Features
 
-- **6 MCP tools** — `memory_store`, `memory_recall`, `memory_search`, `memory_get`, `memory_list`, `memory_forget`
+- **7 MCP tools** — `memory_store`, `memory_recall`, `memory_search`, `memory_context`, `memory_get`, `memory_list`, `memory_forget`
 - **Hybrid storage** — append-only markdown workspace as source of truth, SQLite (FTS5) as a rebuildable index
 - **Field-weighted BM25** — FTS5 ranking with tuned weights: object content (5x), entity key (2x), tags (0.5x)
 - **Hybrid search (opt-in)** — BM25 + dense cosine similarity merged via Reciprocal Rank Fusion (RRF). Requires an external embedding provider (Ollama or any OpenAI-compatible API)
+- **LLM reranking (opt-in)** — post-RRF listwise reranking via Ollama, with graceful degradation if the reranker is unavailable
 - **Natural language mode** — `mode="natural"` strips stop words, applies wildcard stemming, and OR-joins tokens so agents can query in plain language instead of FTS5 syntax
 - **Neighbor inclusion** — `include_neighbors=true` automatically fetches sequential neighbors (e.g. `t004`, `t006` around `t005`) to capture context spread across consecutive entries
 - **Access tracking** — `access_count` and `last_accessed` are bumped on `memory_recall`, providing usage signals without creating feedback loops
@@ -65,6 +66,8 @@ Drop TTL-expired entries from the index (the markdown workspace is left untouche
 | `MEM7_EMBED_MODEL` | `nomic-embed-text` | Model name passed to the embedding API |
 | `MEM7_EMBED_PROVIDER` | `ollama` | Provider format: `ollama` (POST `/api/embed`) or `openai` (POST `/v1/embeddings`) |
 | `MEM7_EMBED_KEY` | *(empty)* | Bearer token for the embedding API (required for OpenAI, optional for Ollama) |
+| `MEM7_RERANK_URL` | *(empty)* | Base URL of the reranking LLM. Setting this enables LLM reranking after RRF merge |
+| `MEM7_RERANK_MODEL` | `gemma4:e4b` | Model name passed to the Ollama generate API for reranking |
 
 Flags on `mem7 serve` mirror `MEM7_LISTEN` and `MEM7_TOKEN` : `--listen :9070 --token mem7_...`.
 
@@ -100,6 +103,60 @@ MEM7_EMBED_PROVIDER=openai \
 ```
 
 When enabled, `memory_store` computes and persists an embedding alongside each entry. `memory_search` retrieves BM25 top-2N and cosine top-2N candidates, then merges them via Reciprocal Rank Fusion (RRF, k=60) into the final top-N. Embeddings are stored as BLOBs in SQLite and cached in memory for sub-ms cosine search.
+
+### LLM reranking setup
+
+LLM reranking is opt-in on top of hybrid search. It over-fetches 3x candidates, merges via RRF, then uses an LLM to score relevance before returning the final top-N. Falls back to non-reranked results if the LLM is unavailable.
+
+```bash
+MEM7_EMBED_URL=http://localhost:11434 \
+MEM7_RERANK_URL=http://localhost:11434 \
+MEM7_RERANK_MODEL=gemma4:e4b \
+  ~/go/bin/mem7
+```
+
+## Python SDK
+
+A provider-agnostic Python client for mem7, wrapping all MCP tools via JSON-RPC over HTTP.
+
+### Install
+
+```bash
+pip install mem7
+```
+
+Or from source :
+
+```bash
+pip install ./sdk/python
+```
+
+### Usage
+
+```python
+from mem7 import Mem7
+
+m = Mem7("http://localhost:9070", token="my-token")
+
+# Store a memory
+m.store("user.prefs", "prefers dark mode", tags=["user"])
+
+# Search (returns formatted text)
+print(m.search("dark mode", limit=5))
+
+# Context (returns structured Memory objects)
+for mem in m.context("dark mode", limit=5):
+    print(f"{mem.key}: {mem.value}")
+
+# Formatted block for LLM prompt injection
+block = m.context_block("user preferences", limit=10)
+
+# Other tools
+m.recall(key="user.prefs")
+m.list(tags=["user"])
+m.get("memory/2026-05-07.md")
+m.forget(key="user.prefs")
+```
 
 ## Workspace layout
 
@@ -193,6 +250,24 @@ Full-text search over memories using SQLite FTS5, ranked by field-weighted BM25.
 | `include_neighbors` | boolean | no | Fetch sequential neighbors around matching entries (default false) |
 | `neighbor_radius` | number | no | How many neighbors to fetch on each side (default 1) |
 
+### memory_context
+
+Same search capabilities as `memory_search` but returns a JSON array of structured objects instead of formatted markdown. Designed for programmatic use by agent SDKs.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `query` | string | yes | Search query |
+| `mode` | string | no | `raw` (default) or `natural` |
+| `tags` | string[] | no | Post-filter by tags |
+| `agent` | string | no | Post-filter by agent |
+| `since` | string | no | Lower bound on `updated_at` (RFC3339) |
+| `until` | string | no | Upper bound on `updated_at` (RFC3339) |
+| `limit` | number | no | Max results (default 10) |
+| `include_neighbors` | boolean | no | Fetch sequential neighbors (default false) |
+| `neighbor_radius` | number | no | Neighbors on each side (default 1) |
+
+Returns a JSON array of `{ "key", "value", "tags", "agent", "updated" }` objects.
+
 ### memory_get
 
 Read a file from the markdown workspace, optionally between `from_line` and `to_line` (1-indexed, inclusive). Paths are resolved relative to the workspace root and refused if they escape it.
@@ -246,9 +321,9 @@ curl -s -X POST http://localhost:9070/rpc \
 ## Architecture
 
 ```
-      Claude Code / agent-mesh / scripts
+      Claude Code / agent-mesh / Python SDK / scripts
                     │
-          MCP stdio ┴ MCP over HTTP
+          MCP stdio ┴ HTTP JSON-RPC
                     │
               ┌─────▼─────┐
               │ Dispatcher │   ← MCP protocol layer
@@ -256,14 +331,14 @@ curl -s -X POST http://localhost:9070/rpc \
                     │
               ┌─────▼─────┐
               │   Store    │   ← orchestrator
-              └──┬──┬──┬───┘
-                 │  │  │
-          ┌──────▼┐ │ ┌▼─────────┐
-          │markdown│ │ │ sqlite   │
-          │workspace│ │ │ (facts + │
-          │(truth) │ │ │ FTS5 +   │
-          └────────┘ │ │ embeds)  │
-                     │ └──────────┘
+              └──┬──┬──┬──┬┘
+                 │  │  │  │
+          ┌──────▼┐ │ ┌▼──────────┐ ┌▼─────────┐
+          │markdown│ │ │ sqlite    │ │ reranker  │
+          │workspace│ │ │ (facts +  │ │ (Ollama)  │
+          │(truth) │ │ │ FTS5 +    │ │ opt-in    │
+          └────────┘ │ │ embeds)   │ └───────────┘
+                     │ └───────────┘
               ┌──────▼──────┐
               │  embedder   │  ← opt-in, external
               │ (Ollama /   │
