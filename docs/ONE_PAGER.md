@@ -38,7 +38,7 @@ The server is a single Go binary — zero dependencies, runs anywhere, deploys i
 - Natural language queries — agents don't need to learn FTS5 syntax
 - Neighbor expansion — automatically fetches surrounding context for sequential entries
 - Tag-based filtering, agent tracking, TTL, temporal range queries
-- Dual transport : MCP stdio (Claude Code, Cursor) + HTTP JSON-RPC (any SDK, any language)
+- Three transports : MCP stdio (Claude Code, Cursor) + HTTP JSON-RPC (SDKs) + MCP SSE (daemon mode for agent-mesh)
 - Provider-agnostic : works with Ollama, OpenAI, or any compatible embedding API. No vendor lock-in
 - Python SDK with structured responses (`Memory` objects, not raw text to parse)
 
@@ -80,7 +80,7 @@ The server is a single Go binary — zero dependencies, runs anywhere, deploys i
 
 ## Current state (May 2026)
 
-- **v0.4.0** — 7 MCP tools, Python SDK, hybrid search + LLM reranking
+- **v0.4.1** — 7 MCP tools, Python SDK, hybrid search + LLM reranking, SSE daemon mode
 - **71% LoCoMo benchmark** — competitive with VC-backed solutions, without gaming the eval
 - **Production use** — backing [agent-mesh](https://github.com/KTCrisis/agent-mesh) orchestrator and [agent7](https://github.com/KTCrisis/agent7) management plane
 - **Next** — per-fact ACL + provenance (v0.5), lifecycle states, temporal bi-temporal queries (v1.0)

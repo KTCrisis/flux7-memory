@@ -1,6 +1,6 @@
 # mem7
 
-A lightweight MCP server in Go for shared memory across AI agents. Single binary, zero cgo, usable standalone over stdio or behind [agent-mesh](https://github.com/KTCrisis/agent-mesh) as a governed backend. Hybrid markdown + SQLite store with full-text search, optional dense-vector hybrid retrieval, LLM reranking, and a dual stdio / HTTP transport. Comes with a [Python SDK](#python-sdk) for provider-agnostic integration.
+A lightweight MCP server in Go for shared memory across AI agents. Single binary, zero cgo, usable standalone over stdio or as a shared daemon behind [agent-mesh](https://github.com/KTCrisis/agent-mesh). Hybrid markdown + SQLite store with full-text search, optional dense-vector hybrid retrieval, LLM reranking, and three transports: MCP stdio, HTTP JSON-RPC, and MCP SSE. Comes with a [Python SDK](#python-sdk) for provider-agnostic integration.
 
 ## Features
 
@@ -12,7 +12,7 @@ A lightweight MCP server in Go for shared memory across AI agents. Single binary
 - **Natural language mode** — `mode="natural"` strips stop words, applies wildcard stemming, and OR-joins tokens so agents can query in plain language instead of FTS5 syntax
 - **Neighbor inclusion** — `include_neighbors=true` automatically fetches sequential neighbors (e.g. `t004`, `t006` around `t005`) to capture context spread across consecutive entries
 - **Access tracking** — `access_count` and `last_accessed` are bumped on `memory_recall`, providing usage signals without creating feedback loops
-- **Dual transport** — same binary speaks MCP over stdio by default, or over HTTP JSON-RPC via `mem7 serve`
+- **Three transports** — MCP stdio (default, for Claude Code / Cursor), HTTP JSON-RPC via `mem7 serve` (for SDKs and direct API calls), and MCP SSE via `GET /sse` (for agent-mesh daemon mode — one process, shared DB)
 - **Snapshot reminder** — `POST /memory/snapshot_reminder` (and the matching MCP method) lets an agent runtime inject a pre-compaction instruction into its context
 - **Rebuildable index** — `mem7 rescan` drops the SQLite index and replays the markdown workspace to restore consistency
 - **Tag filters, agent tracking, TTL**
@@ -36,11 +36,13 @@ Default stdio mode (MCP client spawns the binary) :
 ~/go/bin/mem7
 ```
 
-HTTP backend mode (shared across multiple clients) :
+Daemon mode (shared across multiple clients via HTTP + SSE) :
 
 ```bash
 MEM7_TOKEN=mem7_secret123 ~/go/bin/mem7 serve --listen :9070
 ```
+
+Exposes `/rpc` (HTTP JSON-RPC), `/sse` + `/messages` (MCP SSE transport), `/healthz`, and `/memory/snapshot_reminder`. agent-mesh connects via SSE for MCP tool calls and via `/rpc` for decision writes — one daemon, one database.
 
 Rebuild the SQLite index from the markdown workspace :
 
