@@ -30,3 +30,4 @@ vendor/
 
 # Internal bench harness (not for public repo)
 /bench/
+__pycache__/

@@ -1,0 +1,21 @@
+[Unit]
+Description=mem7 — persistent memory server for AI agents
+After=network.target
+
+[Service]
+Type=simple
+ExecStart=%h/go/bin/mem7 serve --listen :9070
+Restart=on-failure
+RestartSec=3
+Environment=MEM7_DATA_DIR=%h/.mem7
+Environment=MEM7_TOKEN=
+
+# Hardening
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=read-only
+ReadWritePaths=%h/.mem7
+PrivateTmp=true
+
+[Install]
+WantedBy=default.target
