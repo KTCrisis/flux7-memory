@@ -1,4 +1,4 @@
-# mem7
+# flux7-memory
 
 A lightweight MCP server in Go for shared memory across AI agents. Single binary, zero cgo, usable standalone over stdio or as a shared daemon behind [agent-mesh](https://github.com/KTCrisis/flux7-mesh). Hybrid markdown + SQLite store with full-text search, optional dense-vector hybrid retrieval, LLM reranking, and three transports: MCP stdio, HTTP JSON-RPC, and MCP SSE. Comes with a [Python SDK](#python-sdk) for provider-agnostic integration.
 
