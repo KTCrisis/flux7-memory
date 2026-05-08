@@ -1,6 +1,10 @@
-# mem7 Python SDK
+# flux7-memory
 
 Python client for [mem7](https://github.com/KTCrisis/mem7) — governed memory substrate for AI agents.
+
+```bash
+pip install flux7-memory
+```
 
 ```python
 from mem7 import Mem7

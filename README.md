@@ -126,7 +126,7 @@ A provider-agnostic Python client for mem7, wrapping all MCP tools via JSON-RPC 
 ### Install
 
 ```bash
-pip install mem7
+pip install flux7-memory
 ```
 
 Or from source :

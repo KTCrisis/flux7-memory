@@ -13,7 +13,7 @@ These aren't retrieval problems. They're governance problems. And they've been s
 
 ## What mem7 is
 
-Persistent, searchable, governed memory for your agents. `pip install mem7` and go :
+Persistent, searchable, governed memory for your agents. `pip install flux7-memory` and go :
 
 ```python
 from mem7 import Mem7
