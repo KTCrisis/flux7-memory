@@ -4,11 +4,11 @@
 # into internal/memory.Version via -ldflags. A plain `go build` without
 # the Makefile reports "dev" as the version.
 
-MODULE      := github.com/KTCrisis/mem7
+MODULE      := github.com/KTCrisis/flux7-memory
 BINARY      := mem7
 PKG         := ./cmd/mem7
-# Install target mirrors agent-mesh : user-facing path, ignores GOBIN
-# so agent-mesh configs that hardcode ~/go/bin/mem7 keep working.
+# Install target mirrors flux7-mesh : user-facing path, ignores GOBIN
+# so flux7-mesh configs that hardcode ~/go/bin/mem7 keep working.
 BIN         := $(HOME)/go/bin/$(BINARY)
 
 VERSION     ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
