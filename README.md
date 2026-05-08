@@ -1,6 +1,6 @@
 # flux7-memory
 
-A lightweight MCP server in Go for shared memory across AI agents. Single binary, zero cgo, usable standalone over stdio or as a shared daemon behind [agent-mesh](https://github.com/KTCrisis/flux7-mesh). Hybrid markdown + SQLite store with full-text search, optional dense-vector hybrid retrieval, LLM reranking, and three transports: MCP stdio, HTTP JSON-RPC, and MCP SSE. Comes with a [Python SDK](#python-sdk) for provider-agnostic integration.
+A lightweight MCP server in Go for shared memory across AI agents. Single binary, zero cgo, usable standalone over stdio or as a shared daemon behind [flux7-mesh](https://github.com/KTCrisis/flux7-mesh). Hybrid markdown + SQLite store with full-text search, optional dense-vector hybrid retrieval, LLM reranking, and three transports: MCP stdio, HTTP JSON-RPC, and MCP SSE. Comes with a [Python SDK](#python-sdk) for provider-agnostic integration.
 
 ## Features
 
@@ -12,7 +12,7 @@ A lightweight MCP server in Go for shared memory across AI agents. Single binary
 - **Natural language mode** — `mode="natural"` strips stop words, applies wildcard stemming, and OR-joins tokens so agents can query in plain language instead of FTS5 syntax
 - **Neighbor inclusion** — `include_neighbors=true` automatically fetches sequential neighbors (e.g. `t004`, `t006` around `t005`) to capture context spread across consecutive entries
 - **Access tracking** — `access_count` and `last_accessed` are bumped on `memory_recall`, providing usage signals without creating feedback loops
-- **Three transports** — MCP stdio (default, for Claude Code / Cursor), HTTP JSON-RPC via `mem7 serve` (for SDKs and direct API calls), and MCP SSE via `GET /sse` (for agent-mesh daemon mode — one process, shared DB)
+- **Three transports** — MCP stdio (default, for Claude Code / Cursor), HTTP JSON-RPC via `mem7 serve` (for SDKs and direct API calls), and MCP SSE via `GET /sse` (for flux7-mesh daemon mode — one process, shared DB)
 - **Snapshot reminder** — `POST /memory/snapshot_reminder` (and the matching MCP method) lets an agent runtime inject a pre-compaction instruction into its context
 - **Rebuildable index** — `mem7 rescan` drops the SQLite index and replays the markdown workspace to restore consistency
 - **Tag filters, agent tracking, TTL**
@@ -26,7 +26,7 @@ go install github.com/KTCrisis/flux7-memory/cmd/mem7@latest
 Or build from source :
 
 ```bash
-cd mem7
+cd flux7-memory
 go build -o ~/go/bin/mem7 ./cmd/mem7
 ```
 
@@ -44,7 +44,7 @@ Daemon mode (shared across multiple clients via HTTP + SSE) :
 MEM7_TOKEN=mem7_secret123 ~/go/bin/mem7 serve --listen :9070
 ```
 
-Exposes `/rpc` (HTTP JSON-RPC), `/sse` + `/messages` (MCP SSE transport), `/healthz`, and `/memory/snapshot_reminder`. agent-mesh connects via SSE for MCP tool calls and via `/rpc` for decision writes — one daemon, one database.
+Exposes `/rpc` (HTTP JSON-RPC), `/sse` + `/messages` (MCP SSE transport), `/healthz`, and `/memory/snapshot_reminder`. flux7-mesh connects via SSE for MCP tool calls and via `/rpc` for decision writes — one daemon, one database.
 
 Rebuild the SQLite index from the markdown workspace :
 
@@ -196,7 +196,7 @@ Free-form markdown content lives here.
 ---
 ````
 
-## Usage with agent-mesh
+## Usage with flux7-mesh
 
 In your `config.yaml` :
 
@@ -209,9 +209,9 @@ mcp_servers:
       MEM7_DIR: /home/user/.mem7
 ```
 
-agent-mesh discovers the tools via `tools/list` ; no per-tool wiring is required. Grants and policies apply as usual.
+flux7-mesh discovers the tools via `tools/list` ; no per-tool wiring is required. Grants and policies apply as usual.
 
-To share the same memory across several machines behind agent-mesh, run `mem7 serve` on one host and point the other hosts at it via the upcoming remote-client mode (Phase 1.5 of the roadmap).
+To share the same memory across several machines behind flux7-mesh, run `mem7 serve` on one host and point the other hosts at it via the upcoming remote-client mode (Phase 1.5 of the roadmap).
 
 ## Tools
 
@@ -325,7 +325,7 @@ curl -s -X POST http://localhost:9070/rpc \
 ## Architecture
 
 ```
-      Claude Code / agent-mesh / Python SDK / scripts
+      Claude Code / flux7-mesh / Python SDK / scripts
                     │
           MCP stdio ┴ HTTP JSON-RPC
                     │
