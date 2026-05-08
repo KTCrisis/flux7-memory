@@ -36,6 +36,8 @@ Default stdio mode (MCP client spawns the binary) :
 ~/go/bin/mem7
 ```
 
+If a `mem7 serve` daemon is already running, stdio mode auto-detects it and becomes a thin proxy (stdin↔HTTP) instead of opening a second local store. Same command, zero config change.
+
 Daemon mode (shared across multiple clients via HTTP + SSE) :
 
 ```bash

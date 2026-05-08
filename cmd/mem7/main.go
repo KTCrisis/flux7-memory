@@ -116,6 +116,12 @@ type rpcError struct {
 }
 
 func runStdio() error {
+	addr := envOr("MEM7_LISTEN", "localhost:9070")
+	if daemonRunning(addr) {
+		token := os.Getenv("MEM7_TOKEN")
+		return runStdioProxy(addr, token)
+	}
+
 	store, err := newStore()
 	if err != nil {
 		return err
