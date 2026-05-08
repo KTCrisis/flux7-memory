@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
-	"github.com/KTCrisis/mem7/internal/memory"
+	"github.com/KTCrisis/flux7-memory/internal/memory"
 )
 
 // Local is a Transport that invokes a Dispatcher directly in-process.

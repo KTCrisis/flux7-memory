@@ -82,14 +82,14 @@ The server is a single Go binary — zero dependencies, runs anywhere, deploys i
 
 - **v0.4.1** — 7 MCP tools, Python SDK, hybrid search + LLM reranking, SSE daemon mode
 - **71% LoCoMo benchmark** — competitive with VC-backed solutions, without gaming the eval
-- **Production use** — backing [agent-mesh](https://github.com/KTCrisis/agent-mesh) orchestrator and [agent7](https://github.com/KTCrisis/agent7) management plane
+- **Production use** — backing [agent-mesh](https://github.com/KTCrisis/flux7-mesh) orchestrator and [agent7](https://github.com/KTCrisis/flux7-console) management plane
 - **Next** — per-fact ACL + provenance (v0.5), lifecycle states, temporal bi-temporal queries (v1.0)
 
 ## Get started
 
 ```bash
 # Install the server
-go install github.com/KTCrisis/mem7/cmd/mem7@latest
+go install github.com/KTCrisis/flux7-memory/cmd/mem7@latest
 
 # Run with hybrid search (optional, needs Ollama)
 MEM7_EMBED_URL=http://localhost:11434 mem7 serve --listen :9070
@@ -98,4 +98,4 @@ MEM7_EMBED_URL=http://localhost:11434 mem7 serve --listen :9070
 mem7 serve --listen :9070
 ```
 
-MIT licensed. [github.com/KTCrisis/mem7](https://github.com/KTCrisis/mem7)
+MIT licensed. [github.com/KTCrisis/flux7-memory](https://github.com/KTCrisis/flux7-memory)

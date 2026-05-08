@@ -1,4 +1,4 @@
-module github.com/KTCrisis/mem7
+module github.com/KTCrisis/flux7-memory
 
 go 1.25.0
 

@@ -10,7 +10,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/KTCrisis/mem7/internal/memory"
+	"github.com/KTCrisis/flux7-memory/internal/memory"
 )
 
 // HTTPServer exposes a Transport over HTTP using JSON-RPC 2.0 on /rpc.

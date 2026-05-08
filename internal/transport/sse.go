@@ -11,7 +11,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/KTCrisis/mem7/internal/memory"
+	"github.com/KTCrisis/flux7-memory/internal/memory"
 )
 
 type sseSession struct {

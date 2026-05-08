@@ -8,7 +8,7 @@ import (
 
 // Version is the mem7 server version reported in the MCP initialize
 // handshake. It defaults to "dev" and is overridden at build time by
-// the Makefile via -ldflags "-X github.com/KTCrisis/mem7/internal/memory.Version=<git-describe>".
+// the Makefile via -ldflags "-X github.com/KTCrisis/flux7-memory/internal/memory.Version=<git-describe>".
 // A plain `go build` without Makefile will report "dev".
 var Version = "dev"
 

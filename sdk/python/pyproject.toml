@@ -12,8 +12,8 @@ requires-python = ">=3.10"
 dependencies = ["requests>=2.28"]
 
 [project.urls]
-Homepage = "https://github.com/KTCrisis/mem7"
-Repository = "https://github.com/KTCrisis/mem7"
+Homepage = "https://github.com/KTCrisis/flux7-memory"
+Repository = "https://github.com/KTCrisis/flux7-memory"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/mem7"]

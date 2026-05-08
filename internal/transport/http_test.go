@@ -10,7 +10,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/KTCrisis/mem7/internal/memory"
+	"github.com/KTCrisis/flux7-memory/internal/memory"
 )
 
 func newLocal(t *testing.T) *Local {

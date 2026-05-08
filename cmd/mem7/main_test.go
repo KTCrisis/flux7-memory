@@ -8,8 +8,8 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/KTCrisis/mem7/internal/memory"
-	"github.com/KTCrisis/mem7/internal/transport"
+	"github.com/KTCrisis/flux7-memory/internal/memory"
+	"github.com/KTCrisis/flux7-memory/internal/transport"
 )
 
 // TestStdioRoundTrip drives the stdio loop end-to-end through a Local
