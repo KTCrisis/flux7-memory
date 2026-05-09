@@ -72,7 +72,7 @@ The server is a single Go binary — zero dependencies, runs anywhere, deploys i
 |---|---|---|
 | **Scope** | Single agent, single user | Multi-agent, multi-role |
 | **Human decisions** | Not modeled | First-class facts (tags, agent, timestamps) |
-| **Access control** | None or coarse | Tag/agent-scoped (per-fact ACL in v0.5) |
+| **Access control** | None or coarse | Tag/agent-scoped (per-fact ACL planned) |
 | **Provenance** | None | Agent + timestamp on every fact |
 | **Vendor lock-in** | Tied to specific LLM providers | Go binary + HTTP SDK, works with anything |
 | **Storage** | Opaque | Markdown files you can read and edit |
