@@ -38,7 +38,7 @@ The server is a single Go binary — zero dependencies, runs anywhere, deploys i
 - Natural language queries — agents don't need to learn FTS5 syntax
 - Neighbor expansion — automatically fetches surrounding context for sequential entries
 - Tag-based filtering, agent tracking, TTL, temporal range queries
-- Three transports : MCP stdio (Claude Code, Cursor) + HTTP JSON-RPC (SDKs) + MCP SSE (daemon mode for agent-mesh)
+- Three transports : MCP stdio (Claude Code, Cursor) + HTTP JSON-RPC (SDKs, daemon mode) + MCP SSE (flux7-mesh integration)
 - Provider-agnostic : works with Ollama, OpenAI, or any compatible embedding API. No vendor lock-in
 - Python SDK with structured responses (`Memory` objects, not raw text to parse)
 
@@ -80,10 +80,10 @@ The server is a single Go binary — zero dependencies, runs anywhere, deploys i
 
 ## Current state (May 2026)
 
-- **v0.4.1** — 7 MCP tools, Python SDK, hybrid search + LLM reranking, SSE daemon mode
+- **v0.5.0** — 7 MCP tools, Python SDK, hybrid search + LLM reranking, SSE daemon mode, auto-proxy stdio→daemon
 - **71% LoCoMo benchmark** — competitive with VC-backed solutions, without gaming the eval
-- **Production use** — backing [agent-mesh](https://github.com/KTCrisis/flux7-mesh) orchestrator and [agent7](https://github.com/KTCrisis/flux7-console) management plane
-- **Next** — per-fact ACL + provenance (v0.5), lifecycle states, temporal bi-temporal queries (v1.0)
+- **Production use** — backing [flux7-mesh](https://github.com/KTCrisis/flux7-mesh) governance proxy and [flux7-console](https://github.com/KTCrisis/flux7-console) management plane
+- **Next** — per-fact ACL + provenance, lifecycle states, temporal bi-temporal queries (v1.0)
 
 ## Get started
 
@@ -98,4 +98,4 @@ MEM7_EMBED_URL=http://localhost:11434 mem7 serve --listen :9070
 mem7 serve --listen :9070
 ```
 
-MIT licensed. [github.com/KTCrisis/flux7-memory](https://github.com/KTCrisis/flux7-memory)
+Apache 2.0 licensed. [github.com/KTCrisis/flux7-memory](https://github.com/KTCrisis/flux7-memory)
