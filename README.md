@@ -354,4 +354,4 @@ Every write goes through the markdown writer first and then updates the SQLite i
 
 ## License
 
-MIT
+Apache 2.0
