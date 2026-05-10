@@ -1,4 +1,15 @@
+```
+   ______ ____                  
+  / __/ //_  /_____ _  ___ __ _ 
+ / _// /__/ /___/  ' \/ -_)  ' \
+/_/ /____/_/   /_/_/_/\__/_/_/_/
+```
+
 # flux7-memory
+
+[![GitHub release](https://img.shields.io/github/v/release/KTCrisis/flux7-memory?style=flat-square&color=00bcd4)](https://github.com/KTCrisis/flux7-memory/releases)
+[![Go](https://img.shields.io/badge/Go-1.25+-00ADD8?style=flat-square&logo=go&logoColor=white)](https://go.dev)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue?style=flat-square)](LICENSE)
 
 A lightweight MCP server in Go for shared memory across AI agents. Single binary, zero cgo, usable standalone over stdio or as a shared daemon behind [flux7-mesh](https://github.com/KTCrisis/flux7-mesh). Hybrid markdown + SQLite store with full-text search, optional dense-vector hybrid retrieval, LLM reranking, and three transports: MCP stdio, HTTP JSON-RPC, and MCP SSE. Comes with a [Python SDK](#python-sdk) for provider-agnostic integration.
 
