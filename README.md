@@ -319,7 +319,7 @@ Delete memories by key and/or tags. A tombstone section is appended to the markd
 
 | Method | Path | Description |
 |--------|------|-------------|
-| `GET`  | `/healthz` | Liveness probe (always public, no auth) |
+| `GET`  | `/healthz` | Liveness probe — returns `{"status":"ok","version":"..."}` (always public, no auth) |
 | `POST` | `/rpc` | JSON-RPC 2.0 endpoint — same MCP tool surface as stdio |
 | `POST` | `/memory/snapshot_reminder` | Returns a structured instructional payload for an agent runtime to inject into its context before compaction |
 
