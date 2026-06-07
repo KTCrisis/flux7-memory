@@ -1,0 +1,19 @@
+# flux7-memory daemon — system unit (survives WSL user-manager bus issues).
+# Install:
+#   sudo cp contrib/systemd/mem7.service /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now mem7
+# Adapt User= and paths to your setup.
+
+[Unit]
+Description=flux7-memory daemon (mem7)
+Documentation=https://docs.flux7.art
+After=network.target
+
+[Service]
+User=fluxart
+ExecStart=/home/fluxart/go/bin/mem7 serve --listen :9070
+Restart=on-failure
+RestartSec=2
+
+[Install]
+WantedBy=multi-user.target
