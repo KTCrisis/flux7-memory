@@ -46,6 +46,9 @@ func TestHTTPHealthz(t *testing.T) {
 	if !strings.Contains(rec.Body.String(), `"status":"ok"`) {
 		t.Fatalf("unexpected body: %s", rec.Body.String())
 	}
+	if !strings.Contains(rec.Body.String(), `"version":"`+memory.Version+`"`) {
+		t.Fatalf("expected version %q in body: %s", memory.Version, rec.Body.String())
+	}
 }
 
 func TestHTTPAuthRejectsMissingToken(t *testing.T) {

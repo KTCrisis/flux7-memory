@@ -74,7 +74,8 @@ func (s *HTTPServer) handleHealth(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
-	_, _ = w.Write([]byte(`{"status":"ok"}`))
+	body, _ := json.Marshal(map[string]string{"status": "ok", "version": memory.Version})
+	_, _ = w.Write(body)
 }
 
 func (s *HTTPServer) authMiddleware(next http.Handler) http.Handler {
