@@ -18,6 +18,20 @@ func newStore(t *testing.T) *Store {
 	return s
 }
 
+// First run on a fresh machine: the data dir does not exist yet and
+// NewStore must create it rather than let SQLite fail with CANTOPEN.
+func TestNewStoreCreatesMissingDataDir(t *testing.T) {
+	dir := filepath.Join(t.TempDir(), "nested", ".mem7")
+	s, err := NewStore(dir, 10000)
+	if err != nil {
+		t.Fatalf("NewStore on missing dir: %v", err)
+	}
+	defer s.Close()
+	if res := s.ToolStore(map[string]any{"key": "k", "value": "v"}); res["isError"] == true {
+		t.Fatalf("store after dir creation: %v", res)
+	}
+}
+
 func call(t *testing.T, s *Store, name string, args map[string]any) Result {
 	t.Helper()
 	switch name {

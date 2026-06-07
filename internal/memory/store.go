@@ -40,6 +40,11 @@ func NewStore(dir string, maxEntries int) (*Store, error) {
 	if maxEntries <= 0 {
 		maxEntries = 10000
 	}
+	// First run on a fresh machine: the data dir does not exist yet and
+	// SQLite refuses to create its file in a missing directory (SQLITE_CANTOPEN).
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return nil, fmt.Errorf("create data dir: %w", err)
+	}
 	idx, err := newSQLiteStore(dir)
 	if err != nil {
 		return nil, err
