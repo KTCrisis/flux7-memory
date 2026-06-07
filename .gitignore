@@ -32,3 +32,6 @@ vendor/
 /bench/
 __pycache__/
 dist/
+
+# Local builds
+/bin/
