@@ -87,6 +87,8 @@ Drop TTL-expired entries from the index (the markdown workspace is left untouche
 
 Flags on `mem7 serve` mirror `MEM7_LISTEN` and `MEM7_TOKEN` : `--listen :9070 --token mem7_...`.
 
+To run the daemon as a systemd service, see [`contrib/systemd/mem7.service`](contrib/systemd/mem7.service) (adapt `User=` and paths, then `sudo systemctl enable --now mem7`).
+
 ### Hybrid search setup
 
 Hybrid search is entirely opt-in. Without `MEM7_EMBED_URL`, mem7 uses pure BM25.
