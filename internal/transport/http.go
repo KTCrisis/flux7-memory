@@ -38,6 +38,9 @@ func (s *HTTPServer) Handler() http.Handler {
 	mux.HandleFunc("/healthz", s.handleHealth)
 	mux.Handle("/rpc", s.authMiddleware(http.HandlerFunc(s.handleRPC)))
 	mux.Handle("/memory/snapshot_reminder", s.authMiddleware(http.HandlerFunc(s.handleSnapshotReminder)))
+	mux.Handle("/mcp", s.authMiddleware(http.HandlerFunc(s.handleMCP)))
+	// HTTP+SSE, deprecated by the MCP spec (2026-07-28) in favour of /mcp.
+	// Kept for clients that have not moved yet.
 	mux.Handle("/sse", s.authMiddleware(http.HandlerFunc(s.handleSSE)))
 	mux.Handle("/messages", s.authMiddleware(http.HandlerFunc(s.handleMessages)))
 	return mux
