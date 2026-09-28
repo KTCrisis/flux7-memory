@@ -13,7 +13,14 @@ import (
 var Version = "dev"
 
 // ProtocolVersion is the MCP protocol version mem7 speaks.
-const ProtocolVersion = "2024-11-05"
+// ProtocolVersion is the newest MCP revision mem7 speaks. initialize echoes
+// the client's requested version when it is one of SupportedProtocolVersions,
+// and answers with this one otherwise, as the spec's negotiation asks.
+const ProtocolVersion = "2025-11-25"
+
+// SupportedProtocolVersions are the revisions mem7 answers to. Its surface
+// (tools/list, tools/call) is unchanged across them.
+var SupportedProtocolVersions = []string{"2025-11-25", "2025-06-18", "2025-03-26", "2024-11-05"}
 
 // --- MCP tool metadata ---
 
@@ -181,7 +188,7 @@ func (d *Dispatcher) Call(_ context.Context, method string, params json.RawMessa
 	var result any
 	switch method {
 	case "initialize":
-		result = d.initialize()
+		result = d.initialize(params)
 	case "tools/list":
 		result = d.toolsList()
 	case "tools/call":
@@ -194,9 +201,20 @@ func (d *Dispatcher) Call(_ context.Context, method string, params json.RawMessa
 	return json.Marshal(result)
 }
 
-func (d *Dispatcher) initialize() any {
+func (d *Dispatcher) initialize(params json.RawMessage) any {
+	version := ProtocolVersion
+	var p struct {
+		ProtocolVersion string `json:"protocolVersion"`
+	}
+	if json.Unmarshal(params, &p) == nil {
+		for _, v := range SupportedProtocolVersions {
+			if v == p.ProtocolVersion {
+				version = v
+			}
+		}
+	}
 	return map[string]any{
-		"protocolVersion": ProtocolVersion,
+		"protocolVersion": version,
 		"capabilities": map[string]any{
 			"tools": map[string]any{},
 		},

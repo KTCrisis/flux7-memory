@@ -24,7 +24,7 @@ A lightweight MCP server in Go for shared memory across AI agents. Single binary
 - **Natural language mode** — `mode="natural"` strips stop words, applies wildcard stemming, and OR-joins tokens so agents can query in plain language instead of FTS5 syntax
 - **Neighbor inclusion** — `include_neighbors=true` automatically fetches sequential neighbors (e.g. `t004`, `t006` around `t005`) to capture context spread across consecutive entries
 - **Access tracking** — `access_count` and `last_accessed` are bumped on `memory_recall`, providing usage signals without creating feedback loops
-- **Three transports** — MCP stdio (default, for Claude Code / Cursor), HTTP JSON-RPC via `mem7 serve` (for SDKs and direct API calls), and MCP SSE via `GET /sse` (for flux7-mesh daemon mode — one process, shared DB)
+- **Three transports** — MCP stdio (default, for Claude Code / Cursor), HTTP JSON-RPC via `mem7 serve` (for SDKs and direct API calls), and MCP Streamable HTTP on `POST /mcp` (for flux7-mesh daemon mode: one process, shared DB). The older HTTP+SSE pair (`/sse`, `/messages`) remains for existing clients; the MCP spec deprecates it
 - **Snapshot reminder** — `POST /memory/snapshot_reminder` (and the matching MCP method) lets an agent runtime inject a pre-compaction instruction into its context
 - **Rebuildable index** — `mem7 rescan` drops the SQLite index and replays the markdown workspace to restore consistency
 - **Tag filters, agent tracking, TTL**
