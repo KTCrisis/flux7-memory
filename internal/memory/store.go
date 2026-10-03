@@ -55,12 +55,21 @@ func NewStore(dir string, maxEntries int) (*Store, error) {
 		_ = idx.Close()
 		return nil, fmt.Errorf("read the chain head: %w", err)
 	}
-	return &Store{
+	st := &Store{
 		dir:      dir,
 		md:       md,
 		index:    idx,
 		maxCount: maxEntries,
-	}, nil
+	}
+	if idx.needsRebuild {
+		// the index predates bi-temporal versions (one row per key): replay
+		// the markdown, which kept every version, into the new layout
+		if _, err := st.Rescan(); err != nil {
+			_ = idx.Close()
+			return nil, fmt.Errorf("rebuild the index into versions: %w", err)
+		}
+	}
+	return st, nil
 }
 
 // Close releases the underlying index handle.
@@ -115,6 +124,22 @@ func (s *Store) ToolStoreAs(args map[string]any, c Caller) Result {
 	if v, ok := args["ttl"].(float64); ok {
 		ttl = int(v)
 	}
+	validFrom, err := timeArg(args, "valid_from")
+	if err != nil {
+		return ErrResult(err.Error())
+	}
+	validTo, err := timeArg(args, "valid_to")
+	if err != nil {
+		return ErrResult(err.Error())
+	}
+	if from := validFrom; !validTo.IsZero() {
+		if from.IsZero() {
+			from = time.Now().UTC()
+		}
+		if !validTo.After(from) {
+			return ErrResult("valid_to must come after valid_from (by default, now)")
+		}
+	}
 
 	count, err := s.index.Count()
 	if err != nil {
@@ -141,6 +166,8 @@ func (s *Store) ToolStoreAs(args map[string]any, c Caller) Result {
 		Tags:      tags,
 		Agent:     agent,
 		TraceID:   c.TraceID,
+		ValidFrom: validFrom,
+		ValidTo:   validTo,
 		TTL:       ttl,
 		Updated:   now,
 		Created:   now,
@@ -197,11 +224,16 @@ func (s *Store) ToolRecallAs(args map[string]any, c Caller) Result {
 		limit = int(v)
 	}
 
+	when, err := whenArgs(args)
+	if err != nil {
+		return ErrResult(err.Error())
+	}
 	results, err := s.index.Query(filter{
 		Entity: key,
 		Tags:   tags,
 		Agent:  agent,
 		Limit:  limit,
+		When:   when,
 	})
 	if err != nil {
 		return ErrResult(fmt.Sprintf("query failed: %v", err))
@@ -228,6 +260,9 @@ func (s *Store) ToolRecallAs(args map[string]any, c Caller) Result {
 		if f.TraceID != "" {
 			sb.WriteString(fmt.Sprintf("Trace: %s\n", f.TraceID))
 		}
+		if v := validity(f); v != "" {
+			sb.WriteString(fmt.Sprintf("Valid: %s\n", v))
+		}
 		sb.WriteString(fmt.Sprintf("Updated: %s\n\n", f.Updated.UTC().Format(time.RFC3339)))
 	}
 	return TextResult(sb.String())
@@ -244,7 +279,11 @@ func (s *Store) ToolListAs(args map[string]any, c Caller) Result {
 	tags := parseTags(args["tags"])
 	agent, _ := args["agent"].(string)
 
-	results, err := s.index.List(filter{Tags: tags, Agent: agent})
+	when, err := whenArgs(args)
+	if err != nil {
+		return ErrResult(err.Error())
+	}
+	results, err := s.index.List(filter{Tags: tags, Agent: agent, When: when})
 	if err != nil {
 		return ErrResult(fmt.Sprintf("list failed: %v", err))
 	}
@@ -307,6 +346,11 @@ func (s *Store) ToolSearchAs(args map[string]any, c Caller) Result {
 		IncludeNeighbors: includeNeighbors,
 		NeighborRadius:   neighborRadius,
 	}
+	if w, err := whenArgs(args); err != nil {
+		return ErrResult(err.Error())
+	} else {
+		q.When = w
+	}
 	if v, ok := args["since"].(string); ok && v != "" {
 		if t, err := time.Parse(time.RFC3339, v); err == nil {
 			q.Since = t
@@ -360,6 +404,9 @@ func (s *Store) ToolSearchAs(args map[string]any, c Caller) Result {
 		}
 		if f.TraceID != "" {
 			sb.WriteString(fmt.Sprintf("Trace: %s\n", f.TraceID))
+		}
+		if v := validity(f); v != "" {
+			sb.WriteString(fmt.Sprintf("Valid: %s\n", v))
 		}
 		sb.WriteString(fmt.Sprintf("Updated: %s\n\n", f.Updated.UTC().Format(time.RFC3339)))
 	}
@@ -475,7 +522,7 @@ func (s *Store) ToolForgetAs(args map[string]any, c Caller) Result {
 		if err := s.md.AppendDelete(key, agent, c.TraceID, now); err != nil {
 			return ErrResult(fmt.Sprintf("failed to write tombstone: %v", err))
 		}
-		n, err := s.index.DeleteByEntity(key)
+		n, err := s.index.DeleteByEntity(key, now)
 		if err != nil {
 			return ErrResult(fmt.Sprintf("delete by entity failed: %v", err))
 		}
@@ -485,7 +532,7 @@ func (s *Store) ToolForgetAs(args map[string]any, c Caller) Result {
 		if err := s.md.AppendDeleteTags(tags, agent, c.TraceID, now); err != nil {
 			return ErrResult(fmt.Sprintf("failed to write tombstone: %v", err))
 		}
-		n, err := s.index.DeleteByTags(tags)
+		n, err := s.index.DeleteByTags(tags, now)
 		if err != nil {
 			return ErrResult(fmt.Sprintf("delete by tags failed: %v", err))
 		}
@@ -545,6 +592,11 @@ func (s *Store) ToolContextAs(args map[string]any, c Caller) Result {
 		IncludeNeighbors: includeNeighbors,
 		NeighborRadius:   neighborRadius,
 	}
+	if w, err := whenArgs(args); err != nil {
+		return ErrResult(err.Error())
+	} else {
+		q.When = w
+	}
 	if v, ok := args["since"].(string); ok && v != "" {
 		if t, err := time.Parse(time.RFC3339, v); err == nil {
 			q.Since = t
@@ -582,12 +634,16 @@ func (s *Store) ToolContextAs(args map[string]any, c Caller) Result {
 	items := make([]map[string]any, len(results))
 	for i, f := range results {
 		items[i] = map[string]any{
-			"key":      f.Entity,
-			"value":    f.Object,
-			"tags":     f.Tags,
-			"agent":    f.Agent,
-			"trace_id": f.TraceID,
-			"updated":  f.Updated.UTC().Format(time.RFC3339),
+			"key":        f.Entity,
+			"value":      f.Object,
+			"tags":       f.Tags,
+			"agent":      f.Agent,
+			"trace_id":   f.TraceID,
+			"valid_from": nullTS(f.ValidFrom),
+			"valid_to":   nullTS(f.ValidTo),
+			"tx_from":    nullTS(f.TxFrom),
+			"tx_to":      nullTS(f.TxTo),
+			"updated":    f.Updated.UTC().Format(time.RFC3339),
 		}
 	}
 	data, _ := json.Marshal(items)
@@ -629,14 +685,19 @@ func (s *Store) hybridSearch(q searchQuery) ([]fact, error) {
 		return nil, err
 	}
 
-	if s.embCache == nil {
-		s.embCache, _ = s.index.LoadEmbeddings()
+	embeddings := s.embCache
+	if !q.When.zero() {
+		// another moment: the versions then are not the ones in the cache
+		embeddings, _ = s.index.LoadEmbeddings(q.When)
+	} else if s.embCache == nil {
+		s.embCache, _ = s.index.LoadEmbeddings(temporal{})
 		if s.embCache == nil {
 			s.embCache = make(map[int64][]float32)
 		}
+		embeddings = s.embCache
 	}
 
-	cosineResults := cosineSearch(queryVec, s.embCache, q.Limit*2)
+	cosineResults := cosineSearch(queryVec, embeddings, q.Limit*2)
 
 	factMap := make(map[int64]fact, len(bm25Results))
 	for _, f := range bm25Results {
@@ -649,7 +710,7 @@ func (s *Store) hybridSearch(q searchQuery) ([]fact, error) {
 		}
 	}
 	if len(missingIDs) > 0 {
-		missing, err := s.index.FetchByIDs(missingIDs)
+		missing, err := s.index.FetchByIDs(missingIDs, q.When)
 		if err != nil {
 			return nil, err
 		}

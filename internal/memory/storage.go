@@ -1,5 +1,7 @@
 package memory
 
+import "time"
+
 // storage is the private index contract consumed by Store. It abstracts
 // whatever backend holds the derived index — today SQLite, tomorrow
 // possibly Postgres (Phase 4). The interface lives where it is
@@ -11,8 +13,9 @@ package memory
 // Rescan / Reset / Close is expected to be fast and side-effect-free
 // on disk beyond the index itself.
 type storage interface {
-	// Put upserts a fact keyed by (entity, predicate). The returned
-	// fact carries any server-assigned fields (ID).
+	// Put records a new version of a fact keyed by (entity, predicate),
+	// bi-temporally (see sqliteStore.Put). The returned fact carries any
+	// server-assigned fields (ID).
 	Put(f fact) (fact, error)
 
 	// Query returns facts matching the filter, most recently updated
@@ -30,11 +33,11 @@ type storage interface {
 
 	// DeleteByEntity soft-deletes the fact with this exact entity
 	// (any predicate). Returns the number of rows affected.
-	DeleteByEntity(entity string) (int, error)
+	DeleteByEntity(entity string, at time.Time) (int, error)
 
 	// DeleteByTags soft-deletes every fact whose tag set contains
 	// all of the supplied tags. Returns the number of rows affected.
-	DeleteByTags(tags []string) (int, error)
+	DeleteByTags(tags []string, at time.Time) (int, error)
 
 	// TouchAccessed increments the access_count and sets last_accessed
 	// for the given fact IDs. Used to track usage frequency for scoring.
@@ -44,10 +47,10 @@ type storage interface {
 	StoreEmbedding(id int64, vec []float32) error
 
 	// LoadEmbeddings returns all live fact embeddings keyed by ID.
-	LoadEmbeddings() (map[int64][]float32, error)
+	LoadEmbeddings(when temporal) (map[int64][]float32, error)
 
 	// FetchByIDs returns facts for the given IDs, respecting liveness.
-	FetchByIDs(ids []int64) ([]fact, error)
+	FetchByIDs(ids []int64, when temporal) ([]fact, error)
 
 	// Count returns the number of live facts (not deleted, not expired).
 	Count() (int, error)

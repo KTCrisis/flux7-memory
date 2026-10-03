@@ -19,6 +19,12 @@ func (s *Store) Rescan() (int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
+	// embeddings live only in the index: keep them across the rebuild,
+	// keyed by what they embed
+	kept, err := s.index.(*sqliteStore).snapshotEmbeddings()
+	if err != nil {
+		return 0, fmt.Errorf("snapshot embeddings: %w", err)
+	}
 	if err := s.index.Reset(); err != nil {
 		return 0, fmt.Errorf("reset index: %w", err)
 	}
@@ -61,6 +67,8 @@ func (s *Store) Rescan() (int, error) {
 				Tags:       e.Tags,
 				Agent:      e.Agent,
 				TraceID:    e.TraceID,
+				ValidFrom:  e.ValidFrom,
+				ValidTo:    e.ValidTo,
 				TTL:        e.TTL,
 				Created:    e.Created,
 				Updated:    e.Updated,
@@ -74,16 +82,20 @@ func (s *Store) Rescan() (int, error) {
 				return 0, fmt.Errorf("replay store %q: %w", e.Entity, err)
 			}
 		case "delete":
-			if _, err := s.index.DeleteByEntity(e.Entity); err != nil {
+			if _, err := s.index.DeleteByEntity(e.Entity, entryTime(e)); err != nil {
 				return 0, fmt.Errorf("replay delete %q: %w", e.Entity, err)
 			}
 		case "delete_tags":
-			if _, err := s.index.DeleteByTags(e.Tags); err != nil {
+			if _, err := s.index.DeleteByTags(e.Tags, entryTime(e)); err != nil {
 				return 0, fmt.Errorf("replay delete_tags: %w", err)
 			}
 		}
 	}
 
+	if err := s.index.(*sqliteStore).restoreEmbeddings(kept); err != nil {
+		return 0, fmt.Errorf("restore embeddings: %w", err)
+	}
+	s.embCache = nil
 	return s.index.Count()
 }
 

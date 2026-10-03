@@ -27,8 +27,8 @@ func (s *Store) ToolHistoryAs(args map[string]any, c Caller) Result {
 	}
 
 	type event struct {
-		when                     time.Time
-		what, agent, trace, hash string
+		when                               time.Time
+		what, agent, trace, hash, validity string
 	}
 	var (
 		events []event
@@ -48,13 +48,13 @@ func (s *Store) ToolHistoryAs(args map[string]any, c Caller) Result {
 				if live {
 					what = "update"
 				}
-				events = append(events, event{e.Updated, what, e.Agent, e.TraceID, e.Hash})
+				events = append(events, event{e.Updated, what, e.Agent, e.TraceID, e.Hash, entryValidity(e)})
 				tags, owner, live = e.Tags, e.Agent, true
 			case e.Op == "delete" && e.Entity == key && live:
-				events = append(events, event{e.Deleted, "delete", e.Agent, e.TraceID, e.Hash})
+				events = append(events, event{e.Deleted, "delete", e.Agent, e.TraceID, e.Hash, ""})
 				live = false
 			case e.Op == "delete_tags" && live && hasAll(tags, e.Tags):
-				events = append(events, event{e.Deleted, "delete by tags " + strings.Join(e.Tags, ", "), e.Agent, e.TraceID, e.Hash})
+				events = append(events, event{e.Deleted, "delete by tags " + strings.Join(e.Tags, ", "), e.Agent, e.TraceID, e.Hash, ""})
 				live = false
 			}
 		}
@@ -69,6 +69,9 @@ func (s *Store) ToolHistoryAs(args map[string]any, c Caller) Result {
 		fmt.Fprintf(&sb, "- %s %s", ev.when.UTC().Format(time.RFC3339), ev.what)
 		if ev.agent != "" {
 			fmt.Fprintf(&sb, " by %s", ev.agent)
+		}
+		if ev.validity != "" {
+			fmt.Fprintf(&sb, " · valid %s", ev.validity)
 		}
 		if ev.trace != "" {
 			fmt.Fprintf(&sb, " · trace %s", ev.trace)
@@ -95,4 +98,17 @@ func hasAll(have, want []string) bool {
 		}
 	}
 	return len(want) > 0
+}
+
+// entryValidity is the validity a store entry declared, or "" when it holds
+// from the moment it was written with no end (the default).
+func entryValidity(e mdEntry) string {
+	if e.ValidFrom.IsZero() && e.ValidTo.IsZero() {
+		return ""
+	}
+	vf := e.ValidFrom
+	if vf.IsZero() {
+		vf = e.Updated
+	}
+	return validity(fact{ValidFrom: vf, ValidTo: e.ValidTo, TxFrom: e.Updated})
 }

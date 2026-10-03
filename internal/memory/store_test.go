@@ -443,7 +443,7 @@ func TestHybridSearchMergesResults(t *testing.T) {
 	_ = s.index.StoreEmbedding(noiseID, []float32{0.0, 0.0, 1.0})
 
 	// Load cache
-	s.embCache, _ = s.index.LoadEmbeddings()
+	s.embCache, _ = s.index.LoadEmbeddings(temporal{})
 
 	// Run cosine search directly
 	cosine := cosineSearch(queryVec, s.embCache, 10)
