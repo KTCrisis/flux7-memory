@@ -130,8 +130,9 @@ var Tools = []Tool{
 		InputSchema: ToolSchema{
 			Type: "object",
 			Properties: map[string]ToolProp{
-				"key":  {Type: "string", Description: "Exact key to delete"},
-				"tags": {Type: "array", Description: "Delete all entries matching these tags (AND logic)", Items: &ToolItems{Type: "string"}},
+				"key":   {Type: "string", Description: "Exact key to delete"},
+				"tags":  {Type: "array", Description: "Delete all entries matching these tags (AND logic)", Items: &ToolItems{Type: "string"}},
+				"agent": {Type: "string", Description: "Agent identifier recorded as the author of the deletion"},
 			},
 		},
 	},
@@ -184,7 +185,7 @@ func NewDispatcher(store *Store) *Dispatcher {
 // JSON "result" field of a JSON-RPC response ; errors are JSON-RPC
 // level (method not found, invalid params) and should be rendered into
 // the "error" field.
-func (d *Dispatcher) Call(_ context.Context, method string, params json.RawMessage) (json.RawMessage, error) {
+func (d *Dispatcher) Call(ctx context.Context, method string, params json.RawMessage) (json.RawMessage, error) {
 	var result any
 	switch method {
 	case "initialize":
@@ -192,7 +193,7 @@ func (d *Dispatcher) Call(_ context.Context, method string, params json.RawMessa
 	case "tools/list":
 		result = d.toolsList()
 	case "tools/call":
-		result = d.toolsCall(params)
+		result = d.toolsCall(ctx, params)
 	case "memory/snapshot_reminder":
 		result = d.store.SnapshotReminder()
 	default:
@@ -229,13 +230,14 @@ func (d *Dispatcher) toolsList() any {
 	return map[string]any{"tools": Tools}
 }
 
-func (d *Dispatcher) toolsCall(params json.RawMessage) any {
+func (d *Dispatcher) toolsCall(ctx context.Context, params json.RawMessage) any {
 	if len(params) == 0 {
 		return ErrResult("missing params")
 	}
 	var call struct {
 		Name      string         `json:"name"`
 		Arguments map[string]any `json:"arguments"`
+		Meta      map[string]any `json:"_meta"`
 	}
 	if err := json.Unmarshal(params, &call); err != nil {
 		return ErrResult(fmt.Sprintf("invalid params: %v", err))
@@ -244,21 +246,24 @@ func (d *Dispatcher) toolsCall(params json.RawMessage) any {
 	if args == nil {
 		args = map[string]any{}
 	}
+	// who is calling: the trace of the governed call, and the agent the
+	// mesh vouches for when the request carried mem7's token (caller.go)
+	c := callerFrom(ctx, call.Meta)
 	switch call.Name {
 	case "memory_store":
-		return d.store.ToolStore(args)
+		return d.store.ToolStoreAs(args, c)
 	case "memory_recall":
-		return d.store.ToolRecall(args)
+		return d.store.ToolRecallAs(args, c)
 	case "memory_search":
-		return d.store.ToolSearch(args)
+		return d.store.ToolSearchAs(args, c)
 	case "memory_get":
-		return d.store.ToolGet(args)
+		return d.store.ToolGetAs(args, c)
 	case "memory_list":
-		return d.store.ToolList(args)
+		return d.store.ToolListAs(args, c)
 	case "memory_forget":
-		return d.store.ToolForget(args)
+		return d.store.ToolForgetAs(args, c)
 	case "memory_context":
-		return d.store.ToolContext(args)
+		return d.store.ToolContextAs(args, c)
 	default:
 		return ErrResult("unknown tool: " + call.Name)
 	}

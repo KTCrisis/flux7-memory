@@ -2,6 +2,7 @@ package transport
 
 import (
 	"context"
+	"crypto/subtle"
 	"encoding/json"
 	"errors"
 	"io"
@@ -85,10 +86,13 @@ func (s *HTTPServer) authMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if s.token != "" {
 			got := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-			if got != s.token {
+			if subtle.ConstantTimeCompare([]byte(got), []byte(s.token)) != 1 {
 				http.Error(w, "unauthorized", http.StatusUnauthorized)
 				return
 			}
+			// only a client holding the token may speak for an agent
+			// (the identity in a tools/call _meta, see memory/caller.go)
+			r = r.WithContext(memory.WithAuthenticated(r.Context()))
 		}
 		next.ServeHTTP(w, r)
 	})

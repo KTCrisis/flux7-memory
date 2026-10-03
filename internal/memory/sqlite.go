@@ -103,6 +103,7 @@ func (s *sqliteStore) migrate() error {
 		"ALTER TABLE facts ADD COLUMN access_count INTEGER NOT NULL DEFAULT 0",
 		"ALTER TABLE facts ADD COLUMN last_accessed TEXT",
 		"ALTER TABLE facts ADD COLUMN embedding BLOB",
+		"ALTER TABLE facts ADD COLUMN trace_id TEXT NOT NULL DEFAULT ''",
 	}
 	for _, ddl := range alters {
 		if _, err := s.db.Exec(ddl); err != nil && !strings.Contains(err.Error(), "duplicate column") {
@@ -125,7 +126,12 @@ DROP TABLE IF EXISTS facts;
 	if _, err := s.db.Exec(dropSQL); err != nil {
 		return fmt.Errorf("drop tables: %w", err)
 	}
-	return s.applySchema()
+	if err := s.applySchema(); err != nil {
+		return err
+	}
+	// the columns added since the first schema: a rescan replays facts
+	// that carry them (trace_id) right after this
+	return s.migrate()
 }
 
 func (s *sqliteStore) Close() error { return s.db.Close() }
@@ -162,12 +168,13 @@ func (s *sqliteStore) Put(f fact) (fact, error) {
 	}
 
 	const q = `
-INSERT INTO facts (entity, predicate, object, tags, agent, ttl, source_file, source_line, created_at, updated_at, deleted_at)
-VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
+INSERT INTO facts (entity, predicate, object, tags, agent, trace_id, ttl, source_file, source_line, created_at, updated_at, deleted_at)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL)
 ON CONFLICT(entity, predicate) DO UPDATE SET
   object      = excluded.object,
   tags        = excluded.tags,
   agent       = CASE WHEN excluded.agent != '' THEN excluded.agent ELSE facts.agent END,
+  trace_id    = excluded.trace_id,
   ttl         = excluded.ttl,
   source_file = excluded.source_file,
   source_line = excluded.source_line,
@@ -176,7 +183,7 @@ ON CONFLICT(entity, predicate) DO UPDATE SET
 RETURNING id, created_at;
 `
 	row := s.db.QueryRow(q,
-		f.Entity, f.Predicate, f.Object, marshalTags(f.Tags), f.Agent, f.TTL,
+		f.Entity, f.Predicate, f.Object, marshalTags(f.Tags), f.Agent, f.TraceID, f.TTL,
 		f.SourceFile, f.SourceLine,
 		f.Created.UTC().Format(time.RFC3339), f.Updated.UTC().Format(time.RFC3339),
 	)
@@ -229,7 +236,7 @@ func (s *sqliteStore) selectFacts(f filter, withObject bool) ([]fact, error) {
 	var sb strings.Builder
 	sb.WriteString("SELECT id, entity, predicate, ")
 	sb.WriteString(objCol)
-	sb.WriteString(`, tags, agent, ttl, source_file, source_line, created_at, updated_at FROM facts WHERE `)
+	sb.WriteString(`, tags, agent, trace_id, ttl, source_file, source_line, created_at, updated_at FROM facts WHERE `)
 	sb.WriteString(liveWhereClause)
 
 	args := []any{}
@@ -262,7 +269,7 @@ func (s *sqliteStore) selectFacts(f filter, withObject bool) ([]fact, error) {
 		var fct fact
 		var tagsRaw, createdStr, updatedStr string
 		if err := rows.Scan(&fct.ID, &fct.Entity, &fct.Predicate, &fct.Object,
-			&tagsRaw, &fct.Agent, &fct.TTL, &fct.SourceFile, &fct.SourceLine,
+			&tagsRaw, &fct.Agent, &fct.TraceID, &fct.TTL, &fct.SourceFile, &fct.SourceLine,
 			&createdStr, &updatedStr); err != nil {
 			return nil, err
 		}
@@ -333,7 +340,7 @@ func (s *sqliteStore) Search(q searchQuery) ([]fact, error) {
 
 	var sb strings.Builder
 	sb.WriteString(`
-SELECT f.id, f.entity, f.predicate, f.object, f.tags, f.agent, f.ttl,
+SELECT f.id, f.entity, f.predicate, f.object, f.tags, f.agent, f.trace_id, f.ttl,
        f.source_file, f.source_line, f.created_at, f.updated_at
 FROM facts f
 JOIN facts_fts fts ON fts.rowid = f.id
@@ -529,7 +536,7 @@ func (s *sqliteStore) FetchByIDs(ids []int64) ([]fact, error) {
 		placeholders[i] = "?"
 		args[i] = id
 	}
-	q := "SELECT id, entity, predicate, object, tags, agent, ttl, source_file, source_line, created_at, updated_at FROM facts WHERE id IN (" +
+	q := "SELECT id, entity, predicate, object, tags, agent, trace_id, ttl, source_file, source_line, created_at, updated_at FROM facts WHERE id IN (" +
 		strings.Join(placeholders, ",") + ") AND " + liveWhereClause
 	rows, err := s.db.Query(q, args...)
 	if err != nil {
