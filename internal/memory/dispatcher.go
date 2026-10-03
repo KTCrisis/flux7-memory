@@ -114,6 +114,17 @@ var Tools = []Tool{
 		},
 	},
 	{
+		Name:        "memory_history",
+		Description: "The life of one memory key, oldest first: every store, update and deletion, with its author, the trace of the governed call behind it, and its seal in the workspace's hash chain.",
+		InputSchema: ToolSchema{
+			Type: "object",
+			Properties: map[string]ToolProp{
+				"key": {Type: "string", Description: "Exact key"},
+			},
+			Required: []string{"key"},
+		},
+	},
+	{
 		Name:        "memory_list",
 		Description: "List memory keys with metadata (without values). Useful for browsing what is stored.",
 		InputSchema: ToolSchema{
@@ -260,6 +271,8 @@ func (d *Dispatcher) toolsCall(ctx context.Context, params json.RawMessage) any 
 		return d.store.ToolGetAs(args, c)
 	case "memory_list":
 		return d.store.ToolListAs(args, c)
+	case "memory_history":
+		return d.store.ToolHistoryAs(args, c)
 	case "memory_forget":
 		return d.store.ToolForgetAs(args, c)
 	case "memory_context":

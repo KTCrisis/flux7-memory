@@ -16,7 +16,8 @@ A lightweight MCP server in Go for shared memory across AI agents. Single binary
 
 ## Features
 
-- **7 MCP tools** — `memory_store`, `memory_recall`, `memory_search`, `memory_context`, `memory_get`, `memory_list`, `memory_forget`
+- **8 MCP tools** — `memory_store`, `memory_recall`, `memory_search`, `memory_context`, `memory_get`, `memory_list`, `memory_forget`, `memory_history`
+- **Tamper-evident workspace** — every entry sealed in a hash chain (HMAC with `MEM7_CHAIN_KEY`), checked by `mem7 verify`
 - **Hybrid storage** — append-only markdown workspace as source of truth, SQLite (FTS5) as a rebuildable index
 - **Field-weighted BM25** — FTS5 ranking with tuned weights: object content (5x), entity key (2x), tags (0.5x)
 - **Hybrid search (opt-in)** — BM25 + dense cosine similarity merged via Reciprocal Rank Fusion (RRF). Requires an external embedding provider (Ollama or any OpenAI-compatible API)
@@ -78,6 +79,7 @@ Drop TTL-expired entries from the index (the markdown workspace is left untouche
 | `MEM7_LISTEN` | `:9070` | HTTP bind address when in `serve` mode |
 | `MEM7_TOKEN` | *(empty)* | Bearer token required on `/rpc`, `/mcp`, `/sse` and `/memory/*` when set; also what lets a request speak for an agent (see below) |
 | `MEM7_SCOPES` | *(empty)* | JSON file of read scopes per agent; empty = reads not scoped |
+| `MEM7_CHAIN_KEY` | *(empty)* | Key of the workspace's hash chain (HMAC-SHA256); empty = SHA-256 |
 | `MEM7_MAX_ENTRIES` | `10000` | Soft ceiling on live entries |
 | `MEM7_EMBED_URL` | *(empty)* | Base URL of the embedding provider. Setting this enables hybrid search |
 | `MEM7_EMBED_MODEL` | `nomic-embed-text` | Model name passed to the embedding API |
@@ -257,6 +259,20 @@ Clients that reach mem7 directly with the token but name no agent (the superviso
 
 To share the same memory across several machines behind flux7-mesh, run `mem7 serve` on one host and point the other hosts at it via the upcoming remote-client mode (Phase 1.5 of the roadmap).
 
+
+### Hash chain (tamper evidence)
+
+Every entry mem7 writes to the workspace (store, deletion, deletion by tags) carries the seal of the entry before it (`prev:`) and its own (`hash:`), computed over its parsed fields. Edit an entry, drop one or reorder them, and `mem7 verify` names the first place the chain no longer holds:
+
+```
+$ MEM7_CHAIN_KEY=... mem7 verify
+211 entries: 78 sealed, 133 written before the chain
+seals: HMAC-SHA256 with MEM7_CHAIN_KEY
+chain holds
+```
+
+With `MEM7_CHAIN_KEY` the seal is an HMAC-SHA256: editing the workspace without the key leaves a break no one can reseal. Without it, a plain SHA-256 catches accidents and careless edits, not a forger. Keep the key stable: entries sealed with one key do not verify with another. Entries written before the chain existed are counted, not checked; the chain starts at the first sealed entry. The workspace stays plain markdown you can read and edit by hand; an edit now shows.
+
 ## Tools
 
 ### memory_store
@@ -344,6 +360,15 @@ Delete memories by key and/or tags. A tombstone section is appended to the markd
 | `key` | string | no | Exact key to delete |
 | `tags` | string[] | no | Delete all entries matching these tags (AND logic) |
 | `agent` | string | no | Recorded on the tombstone |
+
+
+### memory_history
+
+The life of one key, oldest first, read from the markdown workspace (the index only knows the current state): every store, update and deletion, by key or by tags, with its author, the trace id of the governed call behind it, and its seal in the hash chain. Entries written before the chain show as unsealed. Scoped like a read.
+
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `key` | string | yes | Exact key |
 
 ## HTTP endpoints
 

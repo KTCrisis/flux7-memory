@@ -50,9 +50,14 @@ func NewStore(dir string, maxEntries int) (*Store, error) {
 	if err != nil {
 		return nil, err
 	}
+	md := newMarkdownWriter(dir)
+	if err := md.loadHead(); err != nil {
+		_ = idx.Close()
+		return nil, fmt.Errorf("read the chain head: %w", err)
+	}
 	return &Store{
 		dir:      dir,
-		md:       newMarkdownWriter(dir),
+		md:       md,
 		index:    idx,
 		maxCount: maxEntries,
 	}, nil

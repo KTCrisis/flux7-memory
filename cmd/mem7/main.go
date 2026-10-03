@@ -41,8 +41,10 @@ func run(args []string) error {
 		return runRescan(args[1:])
 	case "prune":
 		return runPrune(args[1:])
+	case "verify":
+		return runVerify(args[1:])
 	default:
-		return fmt.Errorf("unknown subcommand %q (valid: serve, rescan, prune)", args[0])
+		return fmt.Errorf("unknown subcommand %q (valid: serve, rescan, prune, verify)", args[0])
 	}
 }
 
@@ -70,6 +72,9 @@ func newStore() (*memory.Store, error) {
 	s, err := memory.NewStore(dataDir(), maxEntriesFromEnv())
 	if err != nil {
 		return nil, err
+	}
+	if key := os.Getenv("MEM7_CHAIN_KEY"); key != "" {
+		s.SetChainKey([]byte(key))
 	}
 	if url := os.Getenv("MEM7_EMBED_URL"); url != "" {
 		model := os.Getenv("MEM7_EMBED_MODEL")
@@ -265,5 +270,32 @@ func runPrune(args []string) error {
 		return err
 	}
 	logger.Printf("pruned %d TTL-expired entries from index", n)
+	return nil
+}
+
+// --- verify mode ---
+
+// runVerify walks the workspace's hash chain and reports the first entry it
+// does not vouch for. Exit status 1 when the chain is broken.
+func runVerify(args []string) error {
+	fs := flag.NewFlagSet("verify", flag.ContinueOnError)
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+	key := []byte(os.Getenv("MEM7_CHAIN_KEY"))
+	r, err := memory.VerifyChain(dataDir(), key)
+	if err != nil {
+		return err
+	}
+	mode := "SHA-256 (no MEM7_CHAIN_KEY: catches edits, not a forger)"
+	if r.Keyed {
+		mode = "HMAC-SHA256 with MEM7_CHAIN_KEY"
+	}
+	fmt.Printf("%d entries: %d sealed, %d written before the chain\nseals: %s\n", r.Entries, r.Sealed, r.Legacy, mode)
+	if r.Break != nil {
+		fmt.Printf("BROKEN at %s:%d (%s): %s\n", r.Break.File, r.Break.Line, r.Break.Entity, r.Break.Reason)
+		os.Exit(1)
+	}
+	fmt.Println("chain holds")
 	return nil
 }
