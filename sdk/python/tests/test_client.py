@@ -53,9 +53,15 @@ class TestInit:
         m = Mem7("http://localhost:9070", token="abc")
         assert m._session.headers["Authorization"] == "Bearer abc"
 
-    def test_no_auth_header_without_token(self):
+    def test_no_auth_header_without_token(self, monkeypatch):
+        monkeypatch.delenv("MEM7_TOKEN", raising=False)
         m = Mem7("http://localhost:9070")
         assert "Authorization" not in m._session.headers
+
+    def test_token_from_environment(self, monkeypatch):
+        monkeypatch.setenv("MEM7_TOKEN", "from-env")
+        assert Mem7("http://x")._session.headers["Authorization"] == "Bearer from-env"
+        assert "Authorization" not in Mem7("http://x", token="")._session.headers
 
     def test_content_type_set(self):
         m = Mem7("http://localhost:9070")
@@ -279,3 +285,69 @@ class TestHealth:
         import requests
         with patch.object(client._session, "get", side_effect=requests.ConnectionError):
             assert client.health() is False
+
+
+class TestTime:
+    """mem7 >= 0.8: valid_from/valid_to on writes, valid_at/as_of on reads."""
+
+    def _sent(self, client, method, *args, **kwargs):
+        with patch.object(client._session, "post") as post:
+            post.return_value = MagicMock(json=lambda: _rpc_ok("[]"), raise_for_status=lambda: None)
+            getattr(client, method)(*args, **kwargs)
+            return post.call_args.kwargs["json"]["params"]["arguments"]
+
+    def test_store_validity(self, client):
+        from datetime import date, datetime, timezone
+        args = self._sent(client, "store", "k", "v", valid_from=date(2026, 3, 20),
+                          valid_to=datetime(2026, 4, 5, 9, 30, tzinfo=timezone.utc))
+        assert args["valid_from"] == "2026-03-20"
+        assert args["valid_to"] == "2026-04-05T09:30:00Z"
+
+    def test_store_without_dates_sends_none(self, client):
+        args = self._sent(client, "store", "k", "v")
+        assert "valid_from" not in args and "valid_to" not in args
+
+    def test_naive_datetime_refused(self, client):
+        from datetime import datetime
+        with pytest.raises(ValueError):
+            self._sent(client, "store", "k", "v", valid_from=datetime(2026, 3, 20))
+
+    @pytest.mark.parametrize("method,extra", [("recall", ()), ("search", ("q",)), ("context", ("q",)), ("list", ())])
+    def test_reads_take_valid_at_and_as_of(self, client, method, extra):
+        args = self._sent(client, method, *extra, valid_at="2026-03-01", as_of="2026-04-11")
+        assert args["valid_at"] == "2026-03-01" and args["as_of"] == "2026-04-11"
+
+    def test_context_returns_provenance_and_time(self, client):
+        item = {"key": "k", "value": "v", "tags": [], "agent": "scout7", "updated": "t",
+                "trace_id": "abc", "valid_from": "2026-03-20T00:00:00Z", "valid_to": None,
+                "tx_from": "2026-10-03T09:00:00Z", "tx_to": None}
+        with patch.object(client._session, "post") as post:
+            post.return_value = MagicMock(json=lambda: _rpc_ok(json.dumps([item])), raise_for_status=lambda: None)
+            m = client.context("q")[0]
+        assert (m.trace_id, m.valid_from, m.valid_to) == ("abc", "2026-03-20T00:00:00Z", None)
+
+    def test_forget_signs_with_agent(self, client):
+        args = self._sent(client, "forget", key="k", agent="claude")
+        assert args == {"key": "k", "agent": "claude"}
+
+
+class TestHistory:
+    def test_parse(self, client):
+        text = (
+            "History of k (3 events, oldest first):\n"
+            "- 2026-10-03T09:12:06Z store by scout7 · valid 2026-02-15T00:00:00Z → now · trace 58c93603 · seal 8cf332f6\n"
+            "- 2026-10-03T09:13:00Z delete by tags t1, t2 by claude · trace 90486cd1 · seal ab47df04\n"
+            "- 2026-06-07T10:00:00Z store · unsealed (written before the chain)\n"
+        )
+        with patch.object(client._session, "post") as post:
+            post.return_value = MagicMock(json=lambda: _rpc_ok(text), raise_for_status=lambda: None)
+            ev = client.history("k")
+        assert [e.what for e in ev] == ["store", "delete by tags t1, t2", "store"]
+        assert ev[0].agent == "scout7" and ev[0].valid == "2026-02-15T00:00:00Z → now" and ev[0].seal == "8cf332f6"
+        assert ev[1].agent == "claude" and ev[2].seal == ""
+
+    def test_chain(self, client):
+        with patch.object(client._session, "get") as get:
+            get.return_value = MagicMock(json=lambda: {"holds": True, "report": {"sealed": 5}}, raise_for_status=lambda: None)
+            assert client.chain()["holds"] is True
+            assert get.call_args.args[0].endswith("/memory/chain")
