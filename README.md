@@ -379,8 +379,9 @@ The life of one key, oldest first, read from the markdown workspace (the index o
 | `GET`  | `/healthz` | Liveness probe — returns `{"status":"ok","version":"..."}` (always public, no auth) |
 | `POST` | `/rpc` | JSON-RPC 2.0 endpoint — same MCP tool surface as stdio |
 | `POST` | `/memory/snapshot_reminder` | Returns a structured instructional payload for an agent runtime to inject into its context before compaction |
+| `GET` | `/memory/chain` | The workspace's hash chain report, as `mem7 verify` prints it: `{"holds", "report": {entries, sealed, legacy, keyed, break}}` (bearer auth) |
 
-Bearer auth is applied to `/rpc` and `/memory/*` when `MEM7_TOKEN` (or `--token`) is set.
+Bearer auth is applied to `/rpc`, `/mcp`, `/sse`, `/messages` and `/memory/*` when `MEM7_TOKEN` (or `--token`) is set.
 
 Example :
 
