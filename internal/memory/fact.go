@@ -19,6 +19,7 @@ type fact struct {
 	Object     string
 	Tags       []string
 	Agent      string
+	TraceID    string // W3C trace id of the governed call that wrote it (provenance)
 	TTL        int
 	SourceFile string
 	SourceLine int

@@ -60,6 +60,7 @@ func (s *Store) Rescan() (int, error) {
 				Object:     e.Body,
 				Tags:       e.Tags,
 				Agent:      e.Agent,
+				TraceID:    e.TraceID,
 				TTL:        e.TTL,
 				Created:    e.Created,
 				Updated:    e.Updated,

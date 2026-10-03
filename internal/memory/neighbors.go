@@ -105,7 +105,7 @@ func (s *sqliteStore) fetchByEntities(entities []string) ([]fact, error) {
 	// liveWhereClause contains `%s` tokens (strftime format specifier), so
 	// we must not let Sprintf interpret it — concatenate instead.
 	q := `
-SELECT f.id, f.entity, f.predicate, f.object, f.tags, f.agent, f.ttl,
+SELECT f.id, f.entity, f.predicate, f.object, f.tags, f.agent, f.trace_id, f.ttl,
        f.source_file, f.source_line, f.created_at, f.updated_at
 FROM facts f
 WHERE f.entity IN (` + strings.Join(placeholders, ",") + `)
@@ -127,7 +127,7 @@ func scanFacts(rows *sql.Rows) ([]fact, error) {
 		var fct fact
 		var tagsRaw, createdStr, updatedStr string
 		if err := rows.Scan(&fct.ID, &fct.Entity, &fct.Predicate, &fct.Object,
-			&tagsRaw, &fct.Agent, &fct.TTL, &fct.SourceFile, &fct.SourceLine,
+			&tagsRaw, &fct.Agent, &fct.TraceID, &fct.TTL, &fct.SourceFile, &fct.SourceLine,
 			&createdStr, &updatedStr); err != nil {
 			return nil, err
 		}

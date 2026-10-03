@@ -181,6 +181,7 @@ func runServe(args []string) error {
 	fs := flag.NewFlagSet("serve", flag.ContinueOnError)
 	listen := fs.String("listen", envOr("MEM7_LISTEN", ":9070"), "address to listen on")
 	token := fs.String("token", os.Getenv("MEM7_TOKEN"), "bearer token for authentication (empty = disabled, logs a warning)")
+	scopes := fs.String("scopes", os.Getenv("MEM7_SCOPES"), "JSON file of read scopes per agent (empty = reads not scoped)")
 	if err := fs.Parse(args); err != nil {
 		return err
 	}
@@ -194,8 +195,19 @@ func runServe(args []string) error {
 	t := transport.NewLocal(newDispatcher(store))
 	server := transport.NewHTTPServer(t, *token, logger)
 
+	if *scopes != "" {
+		sc, err := memory.LoadScopes(*scopes)
+		if err != nil {
+			return err
+		}
+		store.SetScopes(sc)
+		logger.Printf("read scopes from %s (%d agents, %d administrators)", *scopes, len(sc.Read), len(sc.Admin))
+	}
 	if *token == "" {
 		logger.Println("WARNING: serving without authentication (no --token / MEM7_TOKEN set)")
+		if *scopes != "" {
+			logger.Println("WARNING: scopes need a token: without one, no request can carry an identity, so nothing is scoped")
+		}
 	}
 	logger.Printf("listening on %s (data dir %s)", *listen, dataDir())
 

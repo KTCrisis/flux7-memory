@@ -24,6 +24,7 @@ type Store struct {
 	emb      *embedder
 	embCache map[int64][]float32
 	rnk      *reranker
+	scopes   *Scopes // nil: reads are not scoped (see caller.go)
 }
 
 func (s *Store) SetEmbedder(url, model, provider, key string) {
@@ -77,7 +78,7 @@ func (s *Store) SnapshotReminder() map[string]any {
 	count, _ := s.index.Count()
 	workspace := filepath.Join(s.dir, workspaceDir)
 	return map[string]any{
-		"reminder": "Context compaction is imminent. Before losing detail, persist any important state into mem7 with memory_store(key, value[, tags, agent]). Use descriptive keys. Long-term facts go to the workspace ; ephemeral session state can carry a TTL.",
+		"reminder":     "Context compaction is imminent. Before losing detail, persist any important state into mem7 with memory_store(key, value[, tags, agent]). Use descriptive keys. Long-term facts go to the workspace ; ephemeral session state can carry a TTL.",
 		"workspace":    workspace,
 		"memory_count": count,
 		"generated_at": time.Now().UTC().Format(time.RFC3339),
@@ -86,7 +87,11 @@ func (s *Store) SnapshotReminder() map[string]any {
 
 // --- Tool methods ---
 
-func (s *Store) ToolStore(args map[string]any) Result {
+// ToolStore is ToolStoreAs for a caller mem7 knows nothing about (stdio,
+// tests, direct clients): not scoped.
+func (s *Store) ToolStore(args map[string]any) Result { return s.ToolStoreAs(args, Caller{}) }
+
+func (s *Store) ToolStoreAs(args map[string]any, c Caller) Result {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -98,6 +103,9 @@ func (s *Store) ToolStore(args map[string]any) Result {
 
 	tags := parseTags(args["tags"])
 	agent, _ := args["agent"].(string)
+	if c.Agent != "" {
+		agent = c.Agent // vouched for by the mesh; a declared name does not count
+	}
 	ttl := 0
 	if v, ok := args["ttl"].(float64); ok {
 		ttl = int(v)
@@ -113,6 +121,9 @@ func (s *Store) ToolStore(args map[string]any) Result {
 		return ErrResult(fmt.Sprintf("index query failed: %v", err))
 	}
 	isNew := len(existing) == 0
+	if !isNew && s.scoped(c) && existing[0].Agent != c.Agent {
+		return ErrResult(fmt.Sprintf("memory '%s' belongs to %s", key, ownerName(existing[0].Agent)))
+	}
 	if isNew && count >= s.maxCount {
 		return ErrResult(fmt.Sprintf("memory full: %d entries (max %d)", count, s.maxCount))
 	}
@@ -124,6 +135,7 @@ func (s *Store) ToolStore(args map[string]any) Result {
 		Object:    value,
 		Tags:      tags,
 		Agent:     agent,
+		TraceID:   c.TraceID,
 		TTL:       ttl,
 		Updated:   now,
 		Created:   now,
@@ -164,7 +176,11 @@ func (s *Store) ToolStore(args map[string]any) Result {
 	return TextResult(fmt.Sprintf("Memory '%s' %s (%d total entries)", key, action, newCount))
 }
 
-func (s *Store) ToolRecall(args map[string]any) Result {
+// ToolRecall is ToolRecallAs for a caller mem7 knows nothing about (stdio,
+// tests, direct clients): not scoped.
+func (s *Store) ToolRecall(args map[string]any) Result { return s.ToolRecallAs(args, Caller{}) }
+
+func (s *Store) ToolRecallAs(args map[string]any, c Caller) Result {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -185,6 +201,7 @@ func (s *Store) ToolRecall(args map[string]any) Result {
 	if err != nil {
 		return ErrResult(fmt.Sprintf("query failed: %v", err))
 	}
+	results = s.visible(results, c)
 	if len(results) == 0 {
 		return TextResult("No memories found.")
 	}
@@ -203,12 +220,19 @@ func (s *Store) ToolRecall(args map[string]any) Result {
 		if f.Agent != "" {
 			sb.WriteString(fmt.Sprintf("Agent: %s\n", f.Agent))
 		}
+		if f.TraceID != "" {
+			sb.WriteString(fmt.Sprintf("Trace: %s\n", f.TraceID))
+		}
 		sb.WriteString(fmt.Sprintf("Updated: %s\n\n", f.Updated.UTC().Format(time.RFC3339)))
 	}
 	return TextResult(sb.String())
 }
 
-func (s *Store) ToolList(args map[string]any) Result {
+// ToolList is ToolListAs for a caller mem7 knows nothing about (stdio,
+// tests, direct clients): not scoped.
+func (s *Store) ToolList(args map[string]any) Result { return s.ToolListAs(args, Caller{}) }
+
+func (s *Store) ToolListAs(args map[string]any, c Caller) Result {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -219,6 +243,7 @@ func (s *Store) ToolList(args map[string]any) Result {
 	if err != nil {
 		return ErrResult(fmt.Sprintf("list failed: %v", err))
 	}
+	results = s.visible(results, c)
 	if len(results) == 0 {
 		return TextResult("No memories found.")
 	}
@@ -242,7 +267,11 @@ func (s *Store) ToolList(args map[string]any) Result {
 // ToolSearch runs a full-text BM25 search on the memory index.
 // Accepts the same tag/agent post-filters as Recall, plus an optional
 // time range (since/until as RFC3339 strings).
-func (s *Store) ToolSearch(args map[string]any) Result {
+// ToolSearch is ToolSearchAs for a caller mem7 knows nothing about (stdio,
+// tests, direct clients): not scoped.
+func (s *Store) ToolSearch(args map[string]any) Result { return s.ToolSearchAs(args, Caller{}) }
+
+func (s *Store) ToolSearchAs(args map[string]any, c Caller) Result {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -305,6 +334,7 @@ func (s *Store) ToolSearch(args map[string]any) Result {
 			results, _ = s.rnk.Rerank(q.Query, results, q.Limit)
 		}
 	}
+	results = s.visible(results, c)
 	if len(results) == 0 {
 		return TextResult("No memories found.")
 	}
@@ -323,6 +353,9 @@ func (s *Store) ToolSearch(args map[string]any) Result {
 		if f.Agent != "" {
 			sb.WriteString(fmt.Sprintf("Agent: %s\n", f.Agent))
 		}
+		if f.TraceID != "" {
+			sb.WriteString(fmt.Sprintf("Trace: %s\n", f.TraceID))
+		}
 		sb.WriteString(fmt.Sprintf("Updated: %s\n\n", f.Updated.UTC().Format(time.RFC3339)))
 	}
 	return TextResult(sb.String())
@@ -332,13 +365,21 @@ func (s *Store) ToolSearch(args map[string]any) Result {
 // between from_line and to_line (1-indexed, inclusive). The path is
 // resolved relative to <data-dir>/workspace and must not escape it ;
 // absolute paths and ".." traversals are refused.
-func (s *Store) ToolGet(args map[string]any) Result {
+// ToolGet is ToolGetAs for a caller mem7 knows nothing about (stdio,
+// tests, direct clients): not scoped.
+func (s *Store) ToolGet(args map[string]any) Result { return s.ToolGetAs(args, Caller{}) }
+
+func (s *Store) ToolGetAs(args map[string]any, c Caller) Result {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	rel, _ := args["path"].(string)
 	if rel == "" {
 		return ErrResult("path is required")
+	}
+	if s.scoped(c) {
+		// the workspace holds every agent's memories in clear
+		return ErrResult("memory_get reads the raw workspace: reserved to administrators when scopes are on")
 	}
 
 	workspace := filepath.Join(s.dir, workspaceDir)
@@ -392,22 +433,41 @@ func (s *Store) ToolGet(args map[string]any) Result {
 	return TextResult(sb.String())
 }
 
-func (s *Store) ToolForget(args map[string]any) Result {
+// ToolForget is ToolForgetAs for a caller mem7 knows nothing about (stdio,
+// tests, direct clients): not scoped.
+func (s *Store) ToolForget(args map[string]any) Result { return s.ToolForgetAs(args, Caller{}) }
+
+func (s *Store) ToolForgetAs(args map[string]any, c Caller) Result {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
 	key, _ := args["key"].(string)
 	tags := parseTags(args["tags"])
 	agent, _ := args["agent"].(string)
+	if c.Agent != "" {
+		agent = c.Agent
+	}
 	now := time.Now().UTC()
 
 	if key == "" && len(tags) == 0 {
 		return ErrResult("key or tags required")
 	}
+	if s.scoped(c) {
+		if len(tags) > 0 {
+			return ErrResult("forgetting by tags reaches every agent's memories: reserved to administrators when scopes are on")
+		}
+		existing, err := s.index.Query(filter{Entity: key, Limit: 1})
+		if err != nil {
+			return ErrResult(fmt.Sprintf("index query failed: %v", err))
+		}
+		if len(existing) > 0 && existing[0].Agent != c.Agent {
+			return ErrResult(fmt.Sprintf("memory '%s' belongs to %s", key, ownerName(existing[0].Agent)))
+		}
+	}
 
 	removed := 0
 	if key != "" {
-		if err := s.md.AppendDelete(key, agent, now); err != nil {
+		if err := s.md.AppendDelete(key, agent, c.TraceID, now); err != nil {
 			return ErrResult(fmt.Sprintf("failed to write tombstone: %v", err))
 		}
 		n, err := s.index.DeleteByEntity(key)
@@ -417,7 +477,7 @@ func (s *Store) ToolForget(args map[string]any) Result {
 		removed += n
 	}
 	if len(tags) > 0 {
-		if err := s.md.AppendDeleteTags(tags, agent, now); err != nil {
+		if err := s.md.AppendDeleteTags(tags, agent, c.TraceID, now); err != nil {
 			return ErrResult(fmt.Sprintf("failed to write tombstone: %v", err))
 		}
 		n, err := s.index.DeleteByTags(tags)
@@ -446,7 +506,11 @@ func (s *Store) Prune() (int, error) {
 
 // ToolContext performs the same search as ToolSearch but returns structured
 // JSON instead of formatted markdown — designed for SDK/programmatic use.
-func (s *Store) ToolContext(args map[string]any) Result {
+// ToolContext is ToolContextAs for a caller mem7 knows nothing about (stdio,
+// tests, direct clients): not scoped.
+func (s *Store) ToolContext(args map[string]any) Result { return s.ToolContextAs(args, Caller{}) }
+
+func (s *Store) ToolContextAs(args map[string]any, c Caller) Result {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
@@ -508,15 +572,17 @@ func (s *Store) ToolContext(args map[string]any) Result {
 			results, _ = s.rnk.Rerank(q.Query, results, q.Limit)
 		}
 	}
+	results = s.visible(results, c)
 
 	items := make([]map[string]any, len(results))
 	for i, f := range results {
 		items[i] = map[string]any{
-			"key":     f.Entity,
-			"value":   f.Object,
-			"tags":    f.Tags,
-			"agent":   f.Agent,
-			"updated": f.Updated.UTC().Format(time.RFC3339),
+			"key":      f.Entity,
+			"value":    f.Object,
+			"tags":     f.Tags,
+			"agent":    f.Agent,
+			"trace_id": f.TraceID,
+			"updated":  f.Updated.UTC().Format(time.RFC3339),
 		}
 	}
 	data, _ := json.Marshal(items)
@@ -637,4 +703,12 @@ func parseTags(v any) []string {
 		}
 	}
 	return tags
+}
+
+// ownerName names a memory's owner in an error message.
+func ownerName(agent string) string {
+	if agent == "" {
+		return "no agent"
+	}
+	return agent
 }

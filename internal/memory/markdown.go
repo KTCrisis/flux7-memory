@@ -50,15 +50,15 @@ func (w *markdownWriter) AppendStore(f fact) (path string, line int, err error) 
 }
 
 // AppendDelete writes a delete-by-entity tombstone.
-func (w *markdownWriter) AppendDelete(entity, agent string, when time.Time) error {
-	entry := formatDeleteEntry(entity, agent, when)
+func (w *markdownWriter) AppendDelete(entity, agent, traceID string, when time.Time) error {
+	entry := formatDeleteEntry(entity, agent, traceID, when)
 	_, _, err := w.appendToDaily(when, entry)
 	return err
 }
 
 // AppendDeleteTags writes a delete-by-tags tombstone.
-func (w *markdownWriter) AppendDeleteTags(tags []string, agent string, when time.Time) error {
-	entry := formatDeleteTagsEntry(tags, agent, when)
+func (w *markdownWriter) AppendDeleteTags(tags []string, agent, traceID string, when time.Time) error {
+	entry := formatDeleteTagsEntry(tags, agent, traceID, when)
 	_, _, err := w.appendToDaily(when, entry)
 	return err
 }
@@ -118,6 +118,11 @@ func formatStoreEntry(f fact) string {
 		sb.WriteString(f.Agent)
 		sb.WriteByte('\n')
 	}
+	if f.TraceID != "" {
+		sb.WriteString("trace: ")
+		sb.WriteString(f.TraceID)
+		sb.WriteByte('\n')
+	}
 	if len(f.Tags) > 0 {
 		sb.WriteString("tags: ")
 		sb.WriteString(strings.Join(f.Tags, ", "))
@@ -164,7 +169,7 @@ func escapeBody(body string) string {
 	return strings.Join(lines, "\n")
 }
 
-func formatDeleteEntry(entity, agent string, when time.Time) string {
+func formatDeleteEntry(entity, agent, traceID string, when time.Time) string {
 	var sb strings.Builder
 	sb.WriteString("\n## ")
 	sb.WriteString(entity)
@@ -177,6 +182,11 @@ func formatDeleteEntry(entity, agent string, when time.Time) string {
 		sb.WriteString(agent)
 		sb.WriteByte('\n')
 	}
+	if traceID != "" {
+		sb.WriteString("trace: ")
+		sb.WriteString(traceID)
+		sb.WriteByte('\n')
+	}
 	sb.WriteString("deleted: ")
 	sb.WriteString(when.UTC().Format(time.RFC3339))
 	sb.WriteByte('\n')
@@ -187,7 +197,7 @@ func formatDeleteEntry(entity, agent string, when time.Time) string {
 	return sb.String()
 }
 
-func formatDeleteTagsEntry(tags []string, agent string, when time.Time) string {
+func formatDeleteTagsEntry(tags []string, agent, traceID string, when time.Time) string {
 	var sb strings.Builder
 	sb.WriteString("\n## [delete-tags: ")
 	sb.WriteString(strings.Join(tags, ", "))
@@ -198,6 +208,11 @@ func formatDeleteTagsEntry(tags []string, agent string, when time.Time) string {
 	if agent != "" {
 		sb.WriteString("agent: ")
 		sb.WriteString(agent)
+		sb.WriteByte('\n')
+	}
+	if traceID != "" {
+		sb.WriteString("trace: ")
+		sb.WriteString(traceID)
 		sb.WriteByte('\n')
 	}
 	sb.WriteString("tags: ")
@@ -222,6 +237,7 @@ type mdEntry struct {
 	Entity     string
 	Predicate  string
 	Agent      string
+	TraceID    string
 	Tags       []string
 	TTL        int
 	Created    time.Time
@@ -307,6 +323,8 @@ func parseEnvelopeLine(e *mdEntry, line string) {
 		e.Predicate = val
 	case "agent":
 		e.Agent = val
+	case "trace":
+		e.TraceID = val
 	case "tags":
 		if val == "" {
 			return
