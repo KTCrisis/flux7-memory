@@ -3,6 +3,7 @@ package memory
 import (
 	"bufio"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -35,6 +36,10 @@ const (
 // called under the Store's mutex — it is not goroutine-safe on its own.
 type markdownWriter struct {
 	root string
+	// head is the hash of the last sealed entry (chain.go); key, when set,
+	// makes the seal an HMAC that only its holder can forge.
+	head string
+	key  []byte
 }
 
 func newMarkdownWriter(root string) *markdownWriter {
@@ -45,21 +50,18 @@ func newMarkdownWriter(root string) *markdownWriter {
 // Returns the path of the file it wrote to and the line number of the
 // heading, so the SQLite index can keep a back-reference.
 func (w *markdownWriter) AppendStore(f fact) (path string, line int, err error) {
-	entry := formatStoreEntry(f)
-	return w.appendToDaily(f.Updated, entry)
+	return w.appendSealed(f.Updated, formatStoreEntry(f))
 }
 
 // AppendDelete writes a delete-by-entity tombstone.
 func (w *markdownWriter) AppendDelete(entity, agent, traceID string, when time.Time) error {
-	entry := formatDeleteEntry(entity, agent, traceID, when)
-	_, _, err := w.appendToDaily(when, entry)
+	_, _, err := w.appendSealed(when, formatDeleteEntry(entity, agent, traceID, when))
 	return err
 }
 
 // AppendDeleteTags writes a delete-by-tags tombstone.
 func (w *markdownWriter) AppendDeleteTags(tags []string, agent, traceID string, when time.Time) error {
-	entry := formatDeleteTagsEntry(tags, agent, traceID, when)
-	_, _, err := w.appendToDaily(when, entry)
+	_, _, err := w.appendSealed(when, formatDeleteTagsEntry(tags, agent, traceID, when))
 	return err
 }
 
@@ -244,6 +246,8 @@ type mdEntry struct {
 	Updated    time.Time
 	Deleted    time.Time
 	Body       string
+	Prev       string // hash of the entry before it in the chain
+	Hash       string // this entry's seal (chain.go)
 	SourceFile string
 	SourceLine int
 }
@@ -256,6 +260,12 @@ func parseDailyFile(path string) ([]mdEntry, error) {
 		return nil, err
 	}
 	defer f.Close()
+	return parseEntries(f, path)
+}
+
+// parseEntries parses markdown entries from r; path is recorded as their
+// source file.
+func parseEntries(f io.Reader, path string) ([]mdEntry, error) {
 
 	var (
 		entries []mdEntry
@@ -325,6 +335,10 @@ func parseEnvelopeLine(e *mdEntry, line string) {
 		e.Agent = val
 	case "trace":
 		e.TraceID = val
+	case "prev":
+		e.Prev = val
+	case "hash":
+		e.Hash = val
 	case "tags":
 		if val == "" {
 			return
