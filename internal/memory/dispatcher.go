@@ -59,11 +59,13 @@ var Tools = []Tool{
 		InputSchema: ToolSchema{
 			Type: "object",
 			Properties: map[string]ToolProp{
-				"key":   {Type: "string", Description: "Unique key for this memory"},
-				"value": {Type: "string", Description: "The content to remember"},
-				"tags":  {Type: "array", Description: "Tags for filtering and grouping", Items: &ToolItems{Type: "string"}},
-				"agent": {Type: "string", Description: "Identifier of the agent storing this memory"},
-				"ttl":   {Type: "number", Description: "Time-to-live in seconds (0 = permanent)", Default: 0},
+				"valid_from": {Type: "string", Description: "When the fact starts to hold in the world (date 2026-03-20 or RFC3339); default: now. A date in the past corrects history"},
+				"valid_to":   {Type: "string", Description: "When it stops holding (date or RFC3339); default: open"},
+				"key":        {Type: "string", Description: "Unique key for this memory"},
+				"value":      {Type: "string", Description: "The content to remember"},
+				"tags":       {Type: "array", Description: "Tags for filtering and grouping", Items: &ToolItems{Type: "string"}},
+				"agent":      {Type: "string", Description: "Identifier of the agent storing this memory"},
+				"ttl":        {Type: "number", Description: "Time-to-live in seconds (0 = permanent)", Default: 0},
 			},
 			Required: []string{"key", "value"},
 		},
@@ -74,10 +76,12 @@ var Tools = []Tool{
 		InputSchema: ToolSchema{
 			Type: "object",
 			Properties: map[string]ToolProp{
-				"key":   {Type: "string", Description: "Exact key to recall"},
-				"tags":  {Type: "array", Description: "Filter by tags (AND logic: all tags must match)", Items: &ToolItems{Type: "string"}},
-				"agent": {Type: "string", Description: "Filter by agent identifier"},
-				"limit": {Type: "number", Description: "Max number of results (default 10)", Default: 10},
+				"as_of":    {Type: "string", Description: "Read what mem7 believed at that moment (date or RFC3339); default: now"},
+				"valid_at": {Type: "string", Description: "Read what held in the world at that moment (date or RFC3339); default: now"},
+				"key":      {Type: "string", Description: "Exact key to recall"},
+				"tags":     {Type: "array", Description: "Filter by tags (AND logic: all tags must match)", Items: &ToolItems{Type: "string"}},
+				"agent":    {Type: "string", Description: "Filter by agent identifier"},
+				"limit":    {Type: "number", Description: "Max number of results (default 10)", Default: 10},
 			},
 		},
 	},
@@ -87,6 +91,8 @@ var Tools = []Tool{
 		InputSchema: ToolSchema{
 			Type: "object",
 			Properties: map[string]ToolProp{
+				"as_of":             {Type: "string", Description: "Read what mem7 believed at that moment (date or RFC3339); default: now"},
+				"valid_at":          {Type: "string", Description: "Read what held in the world at that moment (date or RFC3339); default: now"},
 				"query":             {Type: "string", Description: "Query string. In 'raw' mode this is an FTS5 expression ; in 'natural' mode it is a plain-English question."},
 				"mode":              {Type: "string", Description: "'raw' (default, FTS5 operators preserved) or 'natural' (stop-word stripping, wildcard stemming, OR-join — use this for agent questions)."},
 				"tags":              {Type: "array", Description: "Filter by tags (AND logic)", Items: &ToolItems{Type: "string"}},
@@ -130,8 +136,10 @@ var Tools = []Tool{
 		InputSchema: ToolSchema{
 			Type: "object",
 			Properties: map[string]ToolProp{
-				"tags":  {Type: "array", Description: "Filter by tags (AND logic)", Items: &ToolItems{Type: "string"}},
-				"agent": {Type: "string", Description: "Filter by agent identifier"},
+				"as_of":    {Type: "string", Description: "Read what mem7 believed at that moment (date or RFC3339); default: now"},
+				"valid_at": {Type: "string", Description: "Read what held in the world at that moment (date or RFC3339); default: now"},
+				"tags":     {Type: "array", Description: "Filter by tags (AND logic)", Items: &ToolItems{Type: "string"}},
+				"agent":    {Type: "string", Description: "Filter by agent identifier"},
 			},
 		},
 	},
@@ -153,6 +161,8 @@ var Tools = []Tool{
 		InputSchema: ToolSchema{
 			Type: "object",
 			Properties: map[string]ToolProp{
+				"as_of":             {Type: "string", Description: "Read what mem7 believed at that moment (date or RFC3339); default: now"},
+				"valid_at":          {Type: "string", Description: "Read what held in the world at that moment (date or RFC3339); default: now"},
 				"query":             {Type: "string", Description: "Query string. In 'raw' mode this is an FTS5 expression ; in 'natural' mode it is a plain-English question."},
 				"mode":              {Type: "string", Description: "'raw' (default) or 'natural' (stop-word stripping, wildcard stemming, OR-join)."},
 				"tags":              {Type: "array", Description: "Filter by tags (AND logic)", Items: &ToolItems{Type: "string"}},

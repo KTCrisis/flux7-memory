@@ -17,6 +17,7 @@ A lightweight MCP server in Go for shared memory across AI agents. Single binary
 ## Features
 
 - **8 MCP tools** — `memory_store`, `memory_recall`, `memory_search`, `memory_context`, `memory_get`, `memory_list`, `memory_forget`, `memory_history`
+- **Bi-temporal** — every memory is a series of versions: `valid_from`/`valid_to` on writes, `valid_at` (what held then) and `as_of` (what mem7 believed then) on reads
 - **Tamper-evident workspace** — every entry sealed in a hash chain (HMAC with `MEM7_CHAIN_KEY`), checked by `mem7 verify`
 - **Hybrid storage** — append-only markdown workspace as source of truth, SQLite (FTS5) as a rebuildable index
 - **Field-weighted BM25** — FTS5 ranking with tuned weights: object content (5x), entity key (2x), tags (0.5x)
@@ -260,6 +261,10 @@ Clients that reach mem7 directly with the token but name no agent (the superviso
 To share the same memory across several machines behind flux7-mesh, run `mem7 serve` on one host and point the other hosts at it via the upcoming remote-client mode (Phase 1.5 of the roadmap).
 
 
+### Time: valid and as-of
+
+Every memory is a series of versions on two axes: when it holds in the world (`valid_from`, `valid_to`) and when mem7 believed it (`tx_from`, `tx_to`). `memory_store` takes optional `valid_from` / `valid_to` (a date `2026-03-20` or RFC3339); a new version ends the ones it overlaps and keeps what they said outside its period, so a value given "from now" ends the old one now, and a date in the past corrects history without erasing what was believed. Reads take `valid_at` and `as_of`; without them they return what mem7 believes now of what holds now, as before. `memory_forget` stops believing a key, and a read `as_of` an earlier moment still sees it. An index built before versions is rebuilt from the markdown at start. See [Time](https://docs.flux7.art/mem7/time/).
+
 ### Hash chain (tamper evidence)
 
 Every entry mem7 writes to the workspace (store, deletion, deletion by tags) carries the seal of the entry before it (`prev:`) and its own (`hash:`), computed over its parsed fields. Edit an entry, drop one or reorder them, and `mem7 verify` names the first place the chain no longer holds:
@@ -281,6 +286,8 @@ Upsert a memory entry by key. The markdown workspace receives an append-only sec
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
+| `valid_from` | string | no | When the fact starts to hold (date or RFC3339); default now; in the past, it corrects history |
+| `valid_to` | string | no | When it stops holding; default open |
 | `key` | string | yes | Unique key for this memory |
 | `value` | string | yes | Content to remember (free-form markdown allowed) |
 | `tags` | string[] | no | Tags for filtering and grouping |
@@ -293,6 +300,8 @@ Recall memories by key, tags, or agent, most recently updated first. Bumps `acce
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
+| `valid_at` | string | no | What held at that moment (date or RFC3339); default now |
+| `as_of` | string | no | What mem7 believed at that moment; default now |
 | `key` | string | no | Exact key to recall |
 | `tags` | string[] | no | Filter by tags (AND logic) |
 | `agent` | string | no | Filter by agent |
@@ -304,6 +313,8 @@ Full-text search over memories using SQLite FTS5, ranked by field-weighted BM25.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
+| `valid_at` | string | no | What held at that moment (date or RFC3339); default now |
+| `as_of` | string | no | What mem7 believed at that moment; default now |
 | `query` | string | yes | Search query |
 | `mode` | string | no | `raw` (default, FTS5 syntax) or `natural` (plain language, auto-stemmed) |
 | `tags` | string[] | no | Post-filter by tags |
@@ -320,6 +331,8 @@ Same search capabilities as `memory_search` but returns a JSON array of structur
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
+| `valid_at` | string | no | What held at that moment (date or RFC3339); default now |
+| `as_of` | string | no | What mem7 believed at that moment; default now |
 | `query` | string | yes | Search query |
 | `mode` | string | no | `raw` (default) or `natural` |
 | `tags` | string[] | no | Post-filter by tags |
@@ -348,6 +361,8 @@ List memory keys with metadata (without values).
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
+| `valid_at` | string | no | What held at that moment (date or RFC3339); default now |
+| `as_of` | string | no | What mem7 believed at that moment; default now |
 | `tags` | string[] | no | Filter by tags |
 | `agent` | string | no | Filter by agent |
 

@@ -106,7 +106,8 @@ func (s *sqliteStore) fetchByEntities(entities []string) ([]fact, error) {
 	// we must not let Sprintf interpret it — concatenate instead.
 	q := `
 SELECT f.id, f.entity, f.predicate, f.object, f.tags, f.agent, f.trace_id, f.ttl,
-       f.source_file, f.source_line, f.created_at, f.updated_at
+       f.source_file, f.source_line, f.created_at, f.updated_at,
+       f.valid_from, f.valid_to, f.tx_from, f.tx_to
 FROM facts f
 WHERE f.entity IN (` + strings.Join(placeholders, ",") + `)
   AND ` + liveWhereClause
@@ -126,11 +127,13 @@ func scanFacts(rows *sql.Rows) ([]fact, error) {
 	for rows.Next() {
 		var fct fact
 		var tagsRaw, createdStr, updatedStr string
+		var vf, vt, tf, tt sql.NullString
 		if err := rows.Scan(&fct.ID, &fct.Entity, &fct.Predicate, &fct.Object,
 			&tagsRaw, &fct.Agent, &fct.TraceID, &fct.TTL, &fct.SourceFile, &fct.SourceLine,
-			&createdStr, &updatedStr); err != nil {
+			&createdStr, &updatedStr, &vf, &vt, &tf, &tt); err != nil {
 			return nil, err
 		}
+		fct.ValidFrom, fct.ValidTo, fct.TxFrom, fct.TxTo = parseTS(vf), parseTS(vt), parseTS(tf), parseTS(tt)
 		fct.Tags = unmarshalTags(tagsRaw)
 		fct.Created, _ = time.Parse(time.RFC3339, createdStr)
 		fct.Updated, _ = time.Parse(time.RFC3339, updatedStr)

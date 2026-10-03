@@ -26,7 +26,23 @@ type fact struct {
 	Created    time.Time
 	Updated    time.Time
 	Deleted    *time.Time
+
+	// Bi-temporal: when the fact holds in the world (valid) and when mem7
+	// believed it (tx). Zero means open: no start, or still holding.
+	ValidFrom time.Time
+	ValidTo   time.Time
+	TxFrom    time.Time
+	TxTo      time.Time
 }
+
+// temporal selects which versions of a fact a read sees. The zero value is
+// the usual question: what mem7 believes now, of what holds now.
+type temporal struct {
+	AsOf    time.Time // what mem7 believed at that moment (zero: now)
+	ValidAt time.Time // what held in the world at that moment (zero: now)
+}
+
+func (t temporal) zero() bool { return t.AsOf.IsZero() && t.ValidAt.IsZero() }
 
 // filter is the query shape accepted by the storage layer. All fields
 // are optional ; an empty filter matches every live row.
@@ -35,6 +51,7 @@ type filter struct {
 	Tags   []string
 	Agent  string
 	Limit  int
+	When   temporal
 }
 
 // searchQuery carries the parameters of a full-text search. Query is
@@ -58,6 +75,7 @@ type searchQuery struct {
 	Agent            string
 	Since            time.Time
 	Until            time.Time
+	When             temporal
 	Limit            int
 	IncludeNeighbors bool
 	NeighborRadius   int

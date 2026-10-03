@@ -57,6 +57,14 @@ func canonical(e mdEntry, prev string) string {
 	field("updated", ts(e.Updated))
 	field("deleted", ts(e.Deleted))
 	field("body", e.Body)
+	// added with bi-temporal facts: only present when set, so the seals of
+	// entries written before them do not change
+	if !e.ValidFrom.IsZero() {
+		field("valid_from", ts(e.ValidFrom))
+	}
+	if !e.ValidTo.IsZero() {
+		field("valid_to", ts(e.ValidTo))
+	}
 	return sb.String()
 }
 

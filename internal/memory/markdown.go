@@ -133,6 +133,14 @@ func formatStoreEntry(f fact) string {
 	if f.TTL > 0 {
 		fmt.Fprintf(&sb, "ttl: %d\n", f.TTL)
 	}
+	// only when the caller gave them: by default a fact holds from the
+	// moment it is written, which `updated` already says
+	if !f.ValidFrom.IsZero() {
+		sb.WriteString("valid_from: " + f.ValidFrom.UTC().Format(time.RFC3339) + "\n")
+	}
+	if !f.ValidTo.IsZero() {
+		sb.WriteString("valid_to: " + f.ValidTo.UTC().Format(time.RFC3339) + "\n")
+	}
 	sb.WriteString("created: ")
 	sb.WriteString(f.Created.UTC().Format(time.RFC3339))
 	sb.WriteByte('\n')
@@ -246,6 +254,8 @@ type mdEntry struct {
 	Updated    time.Time
 	Deleted    time.Time
 	Body       string
+	ValidFrom  time.Time
+	ValidTo    time.Time
 	Prev       string // hash of the entry before it in the chain
 	Hash       string // this entry's seal (chain.go)
 	SourceFile string
@@ -335,6 +345,14 @@ func parseEnvelopeLine(e *mdEntry, line string) {
 		e.Agent = val
 	case "trace":
 		e.TraceID = val
+	case "valid_from":
+		if t, err := time.Parse(time.RFC3339, val); err == nil {
+			e.ValidFrom = t
+		}
+	case "valid_to":
+		if t, err := time.Parse(time.RFC3339, val); err == nil {
+			e.ValidTo = t
+		}
 	case "prev":
 		e.Prev = val
 	case "hash":
