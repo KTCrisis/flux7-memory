@@ -3,6 +3,7 @@ package transport
 import (
 	"encoding/json"
 	"net/http"
+	"net/http/httptest"
 	"strings"
 	"testing"
 )
@@ -51,5 +52,30 @@ func TestIdentityHonouredOnlyWithToken(t *testing.T) {
 
 	if rec := mcpPost(t, withToken, storeWithMeta, "wrong"); rec.Code != http.StatusUnauthorized || !strings.Contains(rec.Body.String(), "unauthorized") {
 		t.Errorf("wrong token: %d", rec.Code)
+	}
+}
+
+func TestChainEndpoint(t *testing.T) {
+	h := NewHTTPServer(newLocal(t), "s3cret", nil).Handler()
+	mcpPost(t, h, storeWithMeta, "s3cret")
+	req := httptest.NewRequest(http.MethodGet, "/memory/chain", nil)
+	req.Header.Set("Authorization", "Bearer s3cret")
+	rec := httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	var got struct {
+		Holds  bool `json:"holds"`
+		Report struct {
+			Sealed int `json:"sealed"`
+		} `json:"report"`
+	}
+	_ = json.Unmarshal(rec.Body.Bytes(), &got)
+	if rec.Code != http.StatusOK || !got.Holds || got.Report.Sealed != 1 {
+		t.Errorf("chain: %d %s", rec.Code, rec.Body.String())
+	}
+	req = httptest.NewRequest(http.MethodGet, "/memory/chain", nil)
+	rec = httptest.NewRecorder()
+	h.ServeHTTP(rec, req)
+	if rec.Code != http.StatusUnauthorized {
+		t.Errorf("the chain report needs the token: %d", rec.Code)
 	}
 }
