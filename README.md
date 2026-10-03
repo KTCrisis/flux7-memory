@@ -76,7 +76,8 @@ Drop TTL-expired entries from the index (the markdown workspace is left untouche
 |----------|---------|-------------|
 | `MEM7_DIR` | `~/.mem7` | Data directory (hosts `workspace/` and `index.db`) |
 | `MEM7_LISTEN` | `:9070` | HTTP bind address when in `serve` mode |
-| `MEM7_TOKEN` | *(empty)* | Bearer token required on `/rpc` and `/memory/*` when set |
+| `MEM7_TOKEN` | *(empty)* | Bearer token required on `/rpc`, `/mcp`, `/sse` and `/memory/*` when set; also what lets a request speak for an agent (see below) |
+| `MEM7_SCOPES` | *(empty)* | JSON file of read scopes per agent; empty = reads not scoped |
 | `MEM7_MAX_ENTRIES` | `10000` | Soft ceiling on live entries |
 | `MEM7_EMBED_URL` | *(empty)* | Base URL of the embedding provider. Setting this enables hybrid search |
 | `MEM7_EMBED_MODEL` | `nomic-embed-text` | Model name passed to the embedding API |
@@ -85,7 +86,7 @@ Drop TTL-expired entries from the index (the markdown workspace is left untouche
 | `MEM7_RERANK_URL` | *(empty)* | Base URL of the reranking LLM. Setting this enables LLM reranking after RRF merge |
 | `MEM7_RERANK_MODEL` | `gemma4:e4b` | Model name passed to the Ollama generate API for reranking |
 
-Flags on `mem7 serve` mirror `MEM7_LISTEN` and `MEM7_TOKEN` : `--listen :9070 --token mem7_...`.
+Flags on `mem7 serve` mirror `MEM7_LISTEN`, `MEM7_TOKEN` and `MEM7_SCOPES` : `--listen :9070 --token mem7_... --scopes scopes.json`.
 
 To run the daemon as a systemd service, see [`contrib/systemd/mem7.service`](contrib/systemd/mem7.service) (adapt `User=` and paths, then `sudo systemctl enable --now mem7`).
 
@@ -224,6 +225,35 @@ mcp_servers:
 ```
 
 flux7-mesh discovers the tools via `tools/list` ; no per-tool wiring is required. Grants and policies apply as usual.
+
+### Provenance and agent scopes
+
+When mem7 sits behind flux7-mesh as a `streamable-http` upstream, the mesh puts two things in the `_meta` of each `tools/call`:
+
+- `traceparent`, the W3C trace context of the governed call. mem7 records its trace id on every write and every deletion, in the markdown (`trace:` in the envelope) and in the index; `memory_recall`, `memory_search` and `memory_context` return it. A memory points back to the decision that produced it.
+- `art.flux7/agent`, the agent the mesh authenticated, for an upstream configured with `forward_identity: true`. mem7 honours it **only on a request that carried its bearer token**: anyone can write a `_meta`, only the mesh holds the token. The vouched identity replaces the `agent` argument the caller declared.
+
+```yaml
+# flux7-mesh
+memory:
+  url: http://localhost:9070
+  token: "${MEM7_TOKEN}"          # expanded from the service environment
+mcp_servers:
+  - name: memory
+    transport: streamable-http
+    url: http://localhost:9070/mcp
+    forward_identity: true
+    headers:
+      Authorization: "Bearer ${MEM7_TOKEN}"
+```
+
+With a scopes file, an identified agent reads its own memories plus the owners listed for it; only administrators overwrite or forget another agent's memory, forget by tags, or read the raw workspace (`memory_get`):
+
+```json
+{ "read": { "claude": ["*"], "sup7": ["scout7"] }, "admin": ["claude"] }
+```
+
+Clients that reach mem7 directly with the token but name no agent (the supervisor, the console, the mesh's own decision writer) are not scoped. Without a scopes file, identities still sign the writes and reads stay open. `contrib/systemd/enable-token.sh` wires the token and the scopes into the systemd units of a single machine.
 
 To share the same memory across several machines behind flux7-mesh, run `mem7 serve` on one host and point the other hosts at it via the upcoming remote-client mode (Phase 1.5 of the roadmap).
 
