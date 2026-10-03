@@ -129,20 +129,20 @@ func (w *markdownWriter) loadHead() error {
 
 // ChainReport is what VerifyChain found.
 type ChainReport struct {
-	Entries int  // entries read
-	Legacy  int  // entries before the chain started (no seal)
-	Sealed  int  // entries whose seal holds
-	Keyed   bool // seals were checked with a key (HMAC)
+	Entries int  `json:"entries"` // entries read
+	Legacy  int  `json:"legacy"`  // entries before the chain started (no seal)
+	Sealed  int  `json:"sealed"`  // entries whose seal holds
+	Keyed   bool `json:"keyed"`   // seals were checked with a key (HMAC)
 	// Break is the first place the chain does not hold; nil when it holds.
-	Break *ChainBreak
+	Break *ChainBreak `json:"break"`
 }
 
 // ChainBreak locates the first entry the chain does not vouch for.
 type ChainBreak struct {
-	File   string
-	Line   int
-	Entity string
-	Reason string
+	File   string `json:"file"`
+	Line   int    `json:"line"`
+	Entity string `json:"entity"`
+	Reason string `json:"reason"`
 }
 
 // VerifyChain walks every entry of the workspace in order and checks each

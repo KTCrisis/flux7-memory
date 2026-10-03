@@ -207,6 +207,13 @@ func (d *Dispatcher) Call(ctx context.Context, method string, params json.RawMes
 		result = d.toolsCall(ctx, params)
 	case "memory/snapshot_reminder":
 		result = d.store.SnapshotReminder()
+	case "memory/chain":
+		// the workspace's hash chain, as `mem7 verify` reports it
+		r, err := d.store.VerifyChain()
+		if err != nil {
+			return nil, &RPCError{Code: -32603, Message: "verify chain: " + err.Error()}
+		}
+		result = map[string]any{"holds": r.Break == nil, "report": r}
 	default:
 		return nil, &RPCError{Code: -32601, Message: "method not found: " + method}
 	}

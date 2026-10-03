@@ -39,6 +39,7 @@ func (s *HTTPServer) Handler() http.Handler {
 	mux.HandleFunc("/healthz", s.handleHealth)
 	mux.Handle("/rpc", s.authMiddleware(http.HandlerFunc(s.handleRPC)))
 	mux.Handle("/memory/snapshot_reminder", s.authMiddleware(http.HandlerFunc(s.handleSnapshotReminder)))
+	mux.Handle("/memory/chain", s.authMiddleware(http.HandlerFunc(s.handleChain)))
 	mux.Handle("/mcp", s.authMiddleware(http.HandlerFunc(s.handleMCP)))
 	// HTTP+SSE, deprecated by the MCP spec (2026-07-28) in favour of /mcp.
 	// Kept for clients that have not moved yet.
@@ -162,6 +163,23 @@ func (s *HTTPServer) handleSnapshotReminder(w http.ResponseWriter, r *http.Reque
 		return
 	}
 	result, err := s.transport.Call(r.Context(), "memory/snapshot_reminder", nil)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_, _ = w.Write(result)
+}
+
+// handleChain returns the workspace's hash chain report (GET), the same as
+// `mem7 verify`: entries sealed, entries written before the chain, and the
+// first break if there is one.
+func (s *HTTPServer) handleChain(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodGet {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+	result, err := s.transport.Call(r.Context(), "memory/chain", nil)
 	if err != nil {
 		http.Error(w, err.Error(), http.StatusInternalServerError)
 		return
