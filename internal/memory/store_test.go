@@ -382,6 +382,28 @@ func TestPruneRemovesExpiredAndRescanSkipsThem(t *testing.T) {
 	assertText(t, res, "No memories")
 }
 
+// A memory whose TTL has not elapsed is alive: readable, and kept by prune.
+// strftime('%s') is text in SQLite, and a number compared with text is always
+// the smaller, so a live TTL once read as expired the moment it was written.
+func TestLiveTTLIsReadAndSurvivesPrune(t *testing.T) {
+	s := newStore(t)
+	call(t, s, "memory_store", map[string]any{
+		"key": "ephemeral", "value": "lives an hour", "ttl": float64(3600),
+	})
+	res := call(t, s, "memory_recall", map[string]any{"key": "ephemeral"})
+	assertText(t, res, "lives an hour")
+
+	n, err := s.Prune()
+	if err != nil {
+		t.Fatalf("prune: %v", err)
+	}
+	if n != 0 {
+		t.Fatalf("expected nothing pruned, got %d", n)
+	}
+	res = call(t, s, "memory_list", map[string]any{})
+	assertText(t, res, "1 memories")
+}
+
 func TestAccessTrackingIncrementsOnRecall(t *testing.T) {
 	s := newStore(t)
 	call(t, s, "memory_store", map[string]any{"key": "tracked", "value": "some content"})

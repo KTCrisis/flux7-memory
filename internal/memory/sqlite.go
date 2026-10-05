@@ -314,12 +314,13 @@ func parseTS(v sql.NullString) time.Time {
 
 // liveWhereClause builds the WHERE fragment of the usual read: versions
 // mem7 believes now (not superseded, not deleted), that hold now, not
-// TTL-expired. Times are RFC3339 UTC text, so they compare as strings.
+// TTL-expired. Times are RFC3339 UTC text, so they compare as strings;
+// epoch seconds from strftime('%s') are text too, cast before adding the TTL.
 const liveWhereClause = `
   deleted_at IS NULL AND tx_to IS NULL
   AND (valid_from IS NULL OR valid_from <= strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
   AND (valid_to IS NULL OR valid_to > strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
-  AND (ttl = 0 OR strftime('%s', updated_at) + ttl > strftime('%s', 'now'))
+  AND (ttl = 0 OR CAST(strftime('%s', updated_at) AS INTEGER) + ttl > CAST(strftime('%s', 'now') AS INTEGER))
 `
 
 // liveWhere is liveWhereClause for a moment other than now: as_of picks what
@@ -453,7 +454,7 @@ func (s *sqliteStore) DeleteByTags(tags []string, at time.Time) (int, error) {
 func (s *sqliteStore) PurgeExpired() (int, error) {
 	res, err := s.db.Exec(`DELETE FROM facts
 WHERE ttl > 0
-  AND strftime('%s', updated_at) + ttl <= strftime('%s', 'now')`)
+  AND CAST(strftime('%s', updated_at) AS INTEGER) + ttl <= CAST(strftime('%s', 'now') AS INTEGER)`)
 	if err != nil {
 		return 0, fmt.Errorf("purge expired: %w", err)
 	}
