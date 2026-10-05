@@ -7,7 +7,7 @@ Type=simple
 ExecStart=%h/go/bin/mem7 serve --listen :9070
 Restart=on-failure
 RestartSec=3
-Environment=MEM7_DATA_DIR=%h/.mem7
+Environment=MEM7_DIR=%h/.mem7
 Environment=MEM7_TOKEN=
 
 # Hardening
